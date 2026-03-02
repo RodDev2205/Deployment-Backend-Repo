@@ -75,6 +75,23 @@ export const updateUser = async (req, res) => {
 };
 
 // GET count of active employees (status = 'Activate')
+export const getUser = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const [rows] = await db.query(
+      `SELECT user_id, full_name, username, role_id, branch_id, status, created_at FROM users WHERE user_id = ?`,
+      [userId]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('getUser error', err);
+    res.status(500).json({ error: 'Failed to fetch user', details: err.message });
+  }
+};
+
 export const getActiveEmployeeCount = async (req, res) => {
   try {
     let query;
