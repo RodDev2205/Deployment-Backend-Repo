@@ -130,11 +130,18 @@ export const login = async (req, res) => {
       { expiresIn: "1d" }
     );
 
-    // STEP 7: Return response
+    // STEP 7: Return user info along with token
+    // include values the frontend relies on so auth.user is properly populated
     return res.json({
       message: "Login successful",
       token,
-      role_id: user.role_id
+      user_id: user.user_id,
+      username: user.username,
+      full_name: user.full_name,
+      role_id: user.role_id,
+      role_name: user.role_name || null,
+      branch_id: user.branch_id,
+      status: user.status
     });
 
   } catch (err) {

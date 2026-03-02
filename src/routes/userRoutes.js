@@ -6,7 +6,7 @@ const router = Router();
 
 // fetch profile (self or superadmin)
 router.get(
-  "/user/:id",
+  "/user/me",
   verifyToken,
   (req, res, next) => {
     if (req.user.role_id === 3 || String(req.user.user_id) === req.params.id) {
@@ -16,6 +16,9 @@ router.get(
   },
   getUser
 );
+
+// convenience endpoint: return profile of authenticated user
+router.get("/user/me", verifyToken, getCurrentUser);
 
 router.patch("/user/:id", verifyToken, requireRole(3), updateUser);
 
