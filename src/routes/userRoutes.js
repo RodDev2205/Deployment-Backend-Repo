@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { updateUser, getActiveEmployeeCount } from "../controllers/userController.js";
+import { updateUser, getActiveEmployeeCount, getUser } from "../controllers/userController.js";
 import { verifyToken } from "../middlewares/verifyToken.js";
 import { requireRole } from "../middlewares/requireRole.js";
 const router = Router();
