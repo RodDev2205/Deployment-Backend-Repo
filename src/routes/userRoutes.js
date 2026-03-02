@@ -1,12 +1,12 @@
 import { Router } from "express";
-import { updateUser, getActiveEmployeeCount, getUser } from "../controllers/userController.js";
+import { updateUser, getActiveEmployeeCount, getUser, getCurrentUser } from "../controllers/userController.js";
 import { verifyToken } from "../middlewares/verifyToken.js";
 import { requireRole } from "../middlewares/requireRole.js";
 const router = Router();
 
 // fetch profile (self or superadmin)
 router.get(
-  "/user/me",
+  "/user/:id",
   verifyToken,
   (req, res, next) => {
     if (req.user.role_id === 3 || String(req.user.user_id) === req.params.id) {
