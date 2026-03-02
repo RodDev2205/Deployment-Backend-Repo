@@ -79,7 +79,13 @@ export const getUser = async (req, res) => {
   try {
     const userId = req.params.id;
     const [rows] = await db.query(
-      `SELECT user_id, full_name, username, role_id, branch_id, status, created_at FROM users WHERE user_id = ?`,
+      `
+      SELECT u.user_id, u.full_name, u.username, u.role_id, r.role_name,
+             u.branch_id, u.status, u.created_at
+      FROM users u
+      LEFT JOIN roles r ON u.role_id = r.role_id
+      WHERE u.user_id = ?
+      `,
       [userId]
     );
     if (rows.length === 0) {
