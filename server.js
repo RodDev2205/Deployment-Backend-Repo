@@ -3,7 +3,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import chatSocket from './src/socket/chatSocket.js';
 import dashboardSocket from './src/socket/dashboardSocket.js';
-const PORT = process.env.DB_PORT || 5200;
+const PORT = process.env.PORT || 5200;
 
 // 1️⃣ Create raw HTTP server from Express app
 const httpServer = createServer(app);
