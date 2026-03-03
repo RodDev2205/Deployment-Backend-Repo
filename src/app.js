@@ -24,7 +24,9 @@ dotenv.config();
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+  origin: "https://deployment-frontend-repo.vercel.app"
+}));
 app.use(express.json());
 app.use("/uploads", express.static(path.join(path.resolve(), "uploads")));
 
