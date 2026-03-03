@@ -38,7 +38,8 @@ export const createCashier = async (req, res) => {
 
 export const getCashiers = async (req, res) => {
   try {
-    const branchId = req.user.branch_id; // from JWT
+    const branchId = req.user.branch_id;   // from JWT
+    const creatorId = req.user.user_id;    // logged-in user
 
     const [rows] = await db.query(`
       SELECT 
@@ -49,14 +50,19 @@ export const getCashiers = async (req, res) => {
         status,
         password
       FROM users
-      WHERE role_id = 1 AND branch_id = ?
+      WHERE role_id = 1 
+        AND branch_id = ?
+        AND created_by = ?
       ORDER BY user_id DESC
-    `, [branchId]);
+    `, [branchId, creatorId]);
 
     res.json(rows);
 
   } catch (err) {
-    res.status(500).json({ error: "Failed to load cashiers", details: err.message });
+    res.status(500).json({ 
+      error: "Failed to load cashiers", 
+      details: err.message 
+    });
   }
 };
 
