@@ -54,14 +54,14 @@ export async function getTopMenuItems(req, res) {
       }
     }
 
+    let lim = parseInt(limit);
+    if (isNaN(lim) || lim <= 0) lim = 10;
+
     query += `
       GROUP BY p.product_id, p.product_name
       ORDER BY sold DESC
-      LIMIT ?
+      LIMIT ${lim}
     `;
-    let lim = parseInt(limit);
-    if (isNaN(lim) || lim <= 0) lim = 10;
-    params.push(lim);
 
     // Log built SQL and params to help diagnose bad arguments
     console.log('getTopMenuItems SQL:', query);
