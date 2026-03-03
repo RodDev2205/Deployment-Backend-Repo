@@ -163,6 +163,36 @@ export const getLowStockCount = async (req, res) => {
   }
 };
 
+// GET several low-stock inventory items (optionally filtered by branch)
+export const getLowStockItems = async (req, res) => {
+  try {
+    let query;
+    let params = [];
+    const { branchId, limit = 3 } = req.query;
+
+    if (req.user && req.user.role_id !== 3) {
+      // admin sees only own branch
+      query = `SELECT * FROM inventory WHERE branch_id = ? AND quantity <= low_stock_threshold ORDER BY quantity ASC LIMIT ?`;
+      params = [req.user.branch_id, parseInt(limit)];
+    } else {
+      // superadmin may optionally filter by branchId
+      if (branchId) {
+        query = `SELECT * FROM inventory WHERE branch_id = ? AND quantity <= low_stock_threshold ORDER BY quantity ASC LIMIT ?`;
+        params = [parseInt(branchId), parseInt(limit)];
+      } else {
+        query = `SELECT * FROM inventory WHERE quantity <= low_stock_threshold ORDER BY quantity ASC LIMIT ?`;
+        params = [parseInt(limit)];
+      }
+    }
+
+    const [rows] = await db.execute(query, params);
+    res.status(200).json(rows || []);
+  } catch (error) {
+    console.error("DB ERROR:", error);
+    res.status(500).json({ message: "Database error", error: error.message });
+  }
+};
+
 export const editIngredientById = async (req, res) => {
   try {
     const { id } = req.params; // inventory ID from URL

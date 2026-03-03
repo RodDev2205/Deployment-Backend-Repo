@@ -53,6 +53,14 @@ router.get(
   getLowStockCount
 );
 
+// Get list of low-stock inventory items (limited) for overview dashboard
+router.get(
+  '/low-stock-items',
+  verifyToken,
+  requireRole(2, 3),
+  getLowStockItems
+);
+
 
 
 export default router;
