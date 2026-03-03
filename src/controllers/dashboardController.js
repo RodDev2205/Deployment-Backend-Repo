@@ -6,26 +6,25 @@ export async function getDashboardStats(req, res) {
     const role_id = req.user.role_id;
     const branchId = req.user.branch_id;
 
-    const now = new Date();
-    const fmtDate = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    const startSql = `${fmtDate(now)} 00:00:00`;
-    const endSql = `${fmtDate(now)} 23:59:59`;
-
-    // total sales today (completed only)
+    // use Manila timezone for "today" via MySQL CONVERT_TZ
+    // this avoids any server-local timezone mismatches
     let salesQuery = `SELECT IFNULL(SUM(total_amount),0) AS total_sales
       FROM transactions
-      WHERE status = 'Completed' AND created_at BETWEEN ? AND ?`;
-    let salesParams = [startSql, endSql];
+      WHERE status = 'Completed'
+        AND DATE(CONVERT_TZ(created_at,'SYSTEM','Asia/Manila')) =
+            DATE(CONVERT_TZ(NOW(),'SYSTEM','Asia/Manila'))`;
+    let salesParams = [];
 
-    // transaction counts by status
+    // transaction counts by status filtered to the same Manila "today"
     let countQuery = `SELECT
         SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) AS completed,
         SUM(CASE WHEN status = 'Partial Refunded' THEN 1 ELSE 0 END) AS partial_refunded,
         SUM(CASE WHEN status = 'Refunded' THEN 1 ELSE 0 END) AS refunded,
         SUM(CASE WHEN status = 'Voided' THEN 1 ELSE 0 END) AS voided
       FROM transactions
-      WHERE created_at BETWEEN ? AND ?`;
-    let countParams = [startSql, endSql];
+      WHERE DATE(CONVERT_TZ(created_at,'SYSTEM','Asia/Manila')) =
+            DATE(CONVERT_TZ(NOW(),'SYSTEM','Asia/Manila'))`;
+    let countParams = [];
 
     if (role_id !== 3) {
       salesQuery += ` AND branch_id = ?`;
