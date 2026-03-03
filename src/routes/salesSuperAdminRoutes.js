@@ -5,6 +5,7 @@ import { getKpis, getBranches } from '../controllers/salesSuperAdminController.j
 import { getSalesTrend } from '../controllers/salesTrendController.js';
 import { getBranchComparison } from '../controllers/salesBranchComparisonController.js';
 import { getTopMenuItems } from '../controllers/topMenuController.js';
+import { getDashboardStats } from '../controllers/dashboardController.js';
 
 const router = express.Router();
 
@@ -20,5 +21,7 @@ router.get('/sales-trend', requireRole(2, 3), getSalesTrend);
 router.get('/branch-comparison', requireRole(2, 3), getBranchComparison);
 // top menu items endpoint
 router.get('/top-menu-items', requireRole(2, 3), getTopMenuItems);
+// dashboard statistics for owner/superadmin
+router.get('/dashboard-stats', requireRole(2, 3), getDashboardStats);
 
 export default router;
