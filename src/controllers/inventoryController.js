@@ -169,19 +169,21 @@ export const getLowStockItems = async (req, res) => {
     let query;
     let params = [];
     const { branchId, limit = 3 } = req.query;
+    let finalLimit = parseInt(limit);
+    if (isNaN(finalLimit) || finalLimit <= 0) finalLimit = 3;
 
     if (req.user && req.user.role_id !== 3) {
       // admin sees only own branch
-      query = `SELECT * FROM inventory WHERE branch_id = ? AND quantity <= low_stock_threshold ORDER BY quantity ASC LIMIT ?`;
-      params = [req.user.branch_id, parseInt(limit)];
+      query = `SELECT * FROM inventory WHERE branch_id = ? AND quantity <= low_stock_threshold ORDER BY quantity ASC LIMIT ${finalLimit}`;
+      params = [req.user.branch_id];
     } else {
       // superadmin may optionally filter by branchId
       if (branchId) {
-        query = `SELECT * FROM inventory WHERE branch_id = ? AND quantity <= low_stock_threshold ORDER BY quantity ASC LIMIT ?`;
-        params = [parseInt(branchId), parseInt(limit)];
+        query = `SELECT * FROM inventory WHERE branch_id = ? AND quantity <= low_stock_threshold ORDER BY quantity ASC LIMIT ${finalLimit}`;
+        params = [parseInt(branchId)];
       } else {
-        query = `SELECT * FROM inventory WHERE quantity <= low_stock_threshold ORDER BY quantity ASC LIMIT ?`;
-        params = [parseInt(limit)];
+        query = `SELECT * FROM inventory WHERE quantity <= low_stock_threshold ORDER BY quantity ASC LIMIT ${finalLimit}`;
+        params = [];
       }
     }
 
