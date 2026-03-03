@@ -45,12 +45,12 @@ export async function getDashboardStats(req, res) {
     const empParams = [];
     let creatorFilter = req.user.user_id;
 
-    if (role_id === 3 && req.query.creatorId) {
+    if (role_id === 2 && req.query.creatorId) {
       // allow superadmin to view another user's creations
       creatorFilter = req.query.creatorId;
     }
 
-    if (role_id !== 3) {
+    if (role_id !== 2) {
       // restrict to branch and creator
       empQuery += ` AND branch_id = ? AND created_by = ?`;
       empParams.push(branchId, creatorFilter);
