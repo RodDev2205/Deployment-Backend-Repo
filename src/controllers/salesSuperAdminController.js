@@ -142,3 +142,43 @@ export async function getBranches(req, res) {
     return res.status(500).json({ message: 'Failed to fetch branches', error: err.message });
   }
 }
+
+// return per-branch sales totals and completed counts for today (Manila timezone)
+export async function getBranchSalesSummary(req, res) {
+  try {
+    const role_id = req.user.role_id;
+    const branchId = req.user.branch_id;
+
+    let query = `
+      SELECT b.branch_id,
+             b.branch_name,
+             IFNULL(SUM(t.total_amount),0) AS total_sales,
+             SUM(CASE WHEN t.status='Completed' THEN 1 ELSE 0 END) AS completed_count
+      FROM branches b
+      LEFT JOIN transactions t ON t.branch_id = b.branch_id
+        AND DATE(CONVERT_TZ(t.created_at,'SYSTEM','Asia/Manila')) = DATE(CONVERT_TZ(NOW(),'SYSTEM','Asia/Manila'))
+    `;
+    const params = [];
+
+    // if admin, restrict to their branch
+    if (role_id !== 3) {
+      query += ` WHERE b.branch_id = ?`;
+      params.push(branchId);
+    }
+
+    query += `
+      GROUP BY b.branch_id, b.branch_name
+      ORDER BY b.branch_name ASC
+    `;
+
+    const [rows] = await db.execute(query, params);
+
+    // compute overall total (sum of row totals)
+    const overall = rows.reduce((sum, r) => sum + Number(r.total_sales || 0), 0);
+
+    return res.json({ branches: rows, overall_total: overall });
+  } catch (err) {
+    console.error('getBranchSalesSummary error', err);
+    return res.status(500).json({ message: 'Failed to fetch branch sales summary', error: err.message });
+  }
+}

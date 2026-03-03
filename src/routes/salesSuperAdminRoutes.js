@@ -1,7 +1,7 @@
 import express from 'express';
 import { verifyToken } from '../middlewares/verifyToken.js';
 import { requireRole } from '../middlewares/requireRole.js';
-import { getKpis, getBranches } from '../controllers/salesSuperAdminController.js';
+import { getKpis, getBranches, getBranchSalesSummary } from '../controllers/salesSuperAdminController.js';
 import { getSalesTrend } from '../controllers/salesTrendController.js';
 import { getBranchComparison } from '../controllers/salesBranchComparisonController.js';
 import { getTopMenuItems } from '../controllers/topMenuController.js';
@@ -23,5 +23,7 @@ router.get('/branch-comparison', requireRole(2, 3), getBranchComparison);
 router.get('/top-menu-items', requireRole(2, 3), getTopMenuItems);
 // dashboard statistics for owner/superadmin
 router.get('/dashboard-stats', requireRole(2, 3), getDashboardStats);
+// per-branch sales summary for current day
+router.get('/branch-sales-summary', requireRole(2, 3), getBranchSalesSummary);
 
 export default router;
