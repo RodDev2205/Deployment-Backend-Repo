@@ -31,6 +31,8 @@ export async function getTopMenuItems(req, res) {
         AND t.created_at BETWEEN ? AND ?
     `;
     const params = [startSql, endSql];
+    // debug info
+    console.log('getTopMenuItems called with', { startSql, endSql, branchId: req.query.branchId, role_id, userBranch });
 
     // restrict for admin to their branch, or respect branchId query param for superadmin
     if (role_id === 2) {
