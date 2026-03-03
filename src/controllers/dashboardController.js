@@ -36,12 +36,15 @@ export async function getDashboardStats(req, res) {
     const [[{ total_sales }]] = await db.execute(salesQuery, salesParams);
     const [[status_counts]] = await db.execute(countQuery, countParams);
 
-    // active employees (role 1 or 2)
-    let empQuery = `SELECT COUNT(*) AS count FROM users WHERE role_id IN (1,2)`;
+    // active employees (role 1 or 2) that were created by the current user and whose
+    // status is "activate".  Superadmins (role_id 3) see everyone in the branch; regular
+    // admins only count accounts they themselves created.
+    let empQuery = `SELECT COUNT(*) AS count FROM users WHERE role_id IN (1,2) AND status = 'activate'`;
     const empParams = [];
     if (role_id !== 3) {
-      empQuery += ` AND branch_id = ?`;
-      empParams.push(branchId);
+      // restrict to branch and creator
+      empQuery += ` AND branch_id = ? AND created_by = ?`;
+      empParams.push(branchId, req.user.user_id);
     }
     const [[{ count: active_employees }]] = await db.execute(empQuery, empParams);
 
