@@ -39,7 +39,7 @@ export async function getDashboardStats(req, res) {
     // active employees (role 1 or 2) that were created by the current user and whose
     // status is "activate".  Superadmins (role_id 3) see everyone in the branch; regular
     // admins only count accounts they themselves created.
-    let empQuery = `SELECT COUNT(*) AS count FROM users WHERE role_id IN (1,2) AND status = 'activate'`;
+    let empQuery = `SELECT COUNT(*) AS count FROM users WHERE role_id IN (1,2) AND status = 'Activate'`;
     const empParams = [];
     if (role_id !== 3) {
       // restrict to branch and creator
