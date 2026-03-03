@@ -36,15 +36,30 @@ export async function getDashboardStats(req, res) {
     const [[{ total_sales }]] = await db.execute(salesQuery, salesParams);
     const [[status_counts]] = await db.execute(countQuery, countParams);
 
-    // active employees (role 1 or 2) that were created by the current user and whose
-    // status is "activate".  Superadmins (role_id 3) see everyone in the branch; regular
-    // admins only count accounts they themselves created.
+    // active employees (role 1 or 2) with status 'Activate'.
+    // by default count those created by the current user, but
+    // superadmins can optionally specify ?creatorId=XYZ to look at
+    // someone else's created accounts.  Everyone is still confined
+    // to their branch (admins) or all branches (superadmin).
     let empQuery = `SELECT COUNT(*) AS count FROM users WHERE role_id IN (1,2) AND status = 'Activate'`;
     const empParams = [];
+    let creatorFilter = req.user.user_id;
+
+    if (role_id === 3 && req.query.creatorId) {
+      // allow superadmin to view another user's creations
+      creatorFilter = req.query.creatorId;
+    }
+
     if (role_id !== 3) {
       // restrict to branch and creator
       empQuery += ` AND branch_id = ? AND created_by = ?`;
-      empParams.push(branchId, req.user.user_id);
+      empParams.push(branchId, creatorFilter);
+    } else {
+      // superadmin: no branch restriction, but still filter by creator if provided
+      if (creatorFilter) {
+        empQuery += ` AND created_by = ?`;
+        empParams.push(creatorFilter);
+      }
     }
     const [[{ count: active_employees }]] = await db.execute(empQuery, empParams);
 
