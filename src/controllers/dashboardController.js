@@ -41,7 +41,7 @@ export async function getDashboardStats(req, res) {
     // superadmins can optionally specify ?creatorId=XYZ to look at
     // someone else's created accounts.  Everyone is still confined
     // to their branch (admins) or all branches (superadmin).
-    let empQuery = `SELECT COUNT(*) AS count FROM users WHERE role_id IN (1,2) AND status = 'Activate'`;
+    let empQuery = `SELECT COUNT(*) AS count FROM users WHERE role_id IN (1) AND status = 'Activate'`;
     const empParams = [];
     let creatorFilter = req.user.user_id;
 
