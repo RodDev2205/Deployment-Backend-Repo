@@ -152,7 +152,7 @@ export async function getBranchSalesSummary(req, res) {
     let query = `
       SELECT b.branch_id,
              b.branch_name,
-             IFNULL(SUM(t.total_amount),0) AS total_sales,
+             IFNULL(SUM(CASE WHEN t.status='Completed' THEN t.total_amount ELSE 0 END),0) AS total_sales,
              SUM(CASE WHEN t.status='Completed' THEN 1 ELSE 0 END) AS completed_count
       FROM branches b
       LEFT JOIN transactions t ON t.branch_id = b.branch_id
