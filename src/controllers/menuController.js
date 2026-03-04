@@ -24,6 +24,8 @@ export const getAllProducts = async (req, res) => {
     const menuStatus = req.query.menu_status; // e.g. 'active' or 'archived'
     const showArchived = req.query.showArchived === '1';
 
+    console.log("getAllProducts - menuStatus param:", menuStatus, "type:", typeof menuStatus);
+
     // build base query; archived view should not filter by approval_status
     let baseQuery = `SELECT p.product_id, p.product_name, p.price, p.status, p.menu_status, p.approval_status, 
               p.image_name, p.image_path, p.created_by, p.branch_id,
@@ -34,21 +36,25 @@ export const getAllProducts = async (req, res) => {
     const params = [userBranchId];
 
     if (menuStatus === 'archived') {
+      console.log("ARCHIVED BRANCH - keeping all approval states");
       // keep all approval states for archived items
     } else {
+      console.log("NON-ARCHIVED BRANCH - adding approval filter");
       baseQuery += " AND p.approval_status = 'APPROVED'";
     }
 
     if (menuStatus) {
+      console.log("Adding menu_status filter:", menuStatus);
       baseQuery += " AND p.menu_status = ?";
       params.push(menuStatus);
     } else if (!showArchived) {
+      console.log("No menuStatus and not showArchived - defaulting to active");
       baseQuery += " AND p.menu_status = 'active'";
     }
 
-    console.log("getAllProducts query=", baseQuery, "params=", params);
+    console.log("getAllProducts final query=", baseQuery, "params=", params);
     const [rows] = await db.query(baseQuery, params);
-    console.log("getAllProducts returned", rows.length, "rows");
+    console.log("getAllProducts returned", rows.length, "rows with menu_status values:", rows.map(r => r.menu_status));
 
     res.json(rows);
   } catch (err) {
@@ -59,7 +65,9 @@ export const getAllProducts = async (req, res) => {
 
 // wrapper for archived tab
 export const getArchivedProducts = async (req, res) => {
+  console.log("getArchivedProducts called - setting menu_status to 'archived'");
   req.query.menu_status = 'archived';
+  console.log("After setting - req.query.menu_status =", req.query.menu_status);
   return getAllProducts(req, res);
 };
 
