@@ -5,9 +5,9 @@ export const createCashier = async (req, res) => {
   try {
     const adminId = req.user.user_id; // from JWT
     const branchId = req.user.branch_id; // from JWT
-    const { full_name, username, password } = req.body;
+    const { first_name, last_name, username, password, contact_number } = req.body;
 
-    if (!full_name || !username || !password) {
+    if (!first_name || !last_name || !username || !password) {
       return res.status(400).json({ error: "All fields are required" });
     }
 
@@ -23,9 +23,9 @@ export const createCashier = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     await db.query(
-      `INSERT INTO users (full_name, username, password, role_id, status, branch_id, created_by)
-       VALUES (?, ?, ?, 1, 'Activate', ?, ?)`,
-      [full_name, username, hashedPassword, branchId, adminId]
+      `INSERT INTO users (first_name, last_name, username, password, role_id, status, branch_id, contact_number, created_by)
+       VALUES (?, ?, ?, ?, 1, 'Activate', ?, ?, ?)`,
+      [first_name, last_name, username, hashedPassword, branchId, contact_number || null, adminId]
     );
 
     res.json({ message: "Cashier created successfully" });
@@ -44,11 +44,12 @@ export const getCashiers = async (req, res) => {
     const [rows] = await db.query(`
       SELECT 
         user_id as id,
-        full_name,
+        first_name,
+        last_name,
         username,
         role_id,
         status,
-        password
+        contact_number
       FROM users
       WHERE role_id = 1 
         AND branch_id = ?
@@ -97,15 +98,15 @@ export const toggleCashierStatus = async (req, res) => {
   }
 };
 
-// Update cashier full_name and username
+// Update cashier first_name, last_name, username, and contact_number
 export const updateCashier = async (req, res) => {
   try {
     const { id } = req.params;
     const branchId = req.user.branch_id; // from JWT
-    const { full_name, username } = req.body;
+    const { first_name, last_name, username, contact_number } = req.body;
 
-    if (!full_name || !username) {
-      return res.status(400).json({ error: "Full name and username are required" });
+    if (!first_name || !last_name || !username) {
+      return res.status(400).json({ error: "First name, last name, and username are required" });
     }
 
     // Check if username is already taken by another user
@@ -120,15 +121,15 @@ export const updateCashier = async (req, res) => {
 
     // Update user (ensure cashier belongs to this branch)
     const [result] = await db.query(
-      "UPDATE users SET full_name = ?, username = ? WHERE user_id = ? AND role_id = 1 AND branch_id = ?",
-      [full_name, username, id, branchId]
+      "UPDATE users SET first_name = ?, last_name = ?, username = ?, contact_number = ? WHERE user_id = ? AND role_id = 1 AND branch_id = ?",
+      [first_name, last_name, username, contact_number || null, id, branchId]
     );
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: "Cashier not found or access denied" });
     }
 
-    res.json({ message: "Cashier updated successfully", full_name, username, id });
+    res.json({ message: "Cashier updated successfully", first_name, last_name, username, contact_number, id });
   } catch (err) {
     res.status(500).json({ error: "Failed to update cashier", details: err.message });
   }
