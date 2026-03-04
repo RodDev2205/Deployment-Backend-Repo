@@ -24,13 +24,20 @@ export const getAllProducts = async (req, res) => {
     const menuStatus = req.query.menu_status; // e.g. 'active' or 'archived'
     const showArchived = req.query.showArchived === '1';
 
+    // build base query; archived view should not filter by approval_status
     let baseQuery = `SELECT p.product_id, p.product_name, p.price, p.status, p.menu_status, p.approval_status, 
               p.image_name, p.image_path, p.created_by, p.branch_id,
               c.category_name
        FROM products p
        JOIN categories c ON p.category_id = c.category_id
-       WHERE p.approval_status = 'APPROVED' AND p.branch_id = ?`;
+       WHERE p.branch_id = ?`;
     const params = [userBranchId];
+
+    if (menuStatus === 'archived') {
+      // keep all approval states for archived items
+    } else {
+      baseQuery += " AND p.approval_status = 'APPROVED'";
+    }
 
     if (menuStatus) {
       baseQuery += " AND p.menu_status = ?";
