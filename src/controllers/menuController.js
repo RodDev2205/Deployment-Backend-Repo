@@ -63,12 +63,28 @@ export const getAllProducts = async (req, res) => {
   }
 };
 
-// wrapper for archived tab
+// wrapper for archived tab - directly query without relying on req.query
 export const getArchivedProducts = async (req, res) => {
-  console.log("getArchivedProducts called - setting menu_status to 'archived'");
-  req.query.menu_status = 'archived';
-  console.log("After setting - req.query.menu_status =", req.query.menu_status);
-  return getAllProducts(req, res);
+  try {
+    const userBranchId = req.user.branch_id;
+    
+    let baseQuery = `SELECT p.product_id, p.product_name, p.price, p.status, p.menu_status, p.approval_status, 
+              p.image_name, p.image_path, p.created_by, p.branch_id,
+              c.category_name
+       FROM products p
+       JOIN categories c ON p.category_id = c.category_id
+       WHERE p.branch_id = ? AND p.menu_status = 'archived'`;
+    const params = [userBranchId];
+
+    console.log("getArchivedProducts query=", baseQuery, "params=", params);
+    const [rows] = await db.query(baseQuery, params);
+    console.log("getArchivedProducts returned", rows.length, "rows with menu_status:", rows.map(r => r.menu_status));
+
+    res.json(rows);
+  } catch (err) {
+    console.error("getArchivedProducts error:", err);
+    res.status(500).json({ error: err.message });
+  }
 };
 
 
