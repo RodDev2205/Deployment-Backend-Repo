@@ -19,21 +19,27 @@ export const getAllProducts = async (req, res) => {
   try {
     const userBranchId = req.user.branch_id; // assuming your JWT sets req.user
 
-    // determine filtering based on query parameter
-    // POS clients will use default (show only active menu items)
-    // Admin menu page can append ?showArchived=1 to retrieve everything
+    // determine filtering based on query parameters
+    // priority: explicit menu_status param > showArchived flag > default active
+    const menuStatus = req.query.menu_status; // e.g. 'active' or 'archived'
     const showArchived = req.query.showArchived === '1';
+
     let baseQuery = `SELECT p.product_id, p.product_name, p.price, p.status, p.menu_status, p.approval_status, 
               p.image_name, p.image_path, p.created_by, p.branch_id,
               c.category_name
        FROM products p
        JOIN categories c ON p.category_id = c.category_id
        WHERE p.approval_status = 'APPROVED' AND p.branch_id = ?`;
-    if (!showArchived) {
+    const params = [userBranchId];
+
+    if (menuStatus) {
+      baseQuery += " AND p.menu_status = ?";
+      params.push(menuStatus);
+    } else if (!showArchived) {
       baseQuery += " AND p.menu_status = 'active'";
     }
 
-    const [rows] = await db.query(baseQuery, [userBranchId]);
+    const [rows] = await db.query(baseQuery, params);
 
     res.json(rows);
   } catch (err) {
