@@ -6,8 +6,14 @@ import { verifyToken } from "../middlewares/verifyToken.js";
 import { requireRole } from "../middlewares/requireRole.js";
 
 // multer for chat attachments
+const storageUploadDir = process.env.UPLOAD_DIR || "uploads";
+
+// ensure upload dir exists (shared with menu uploads)
+import fs from "fs";
+fs.mkdirSync(storageUploadDir, { recursive: true });
+
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "uploads/"),
+  destination: (req, file, cb) => cb(null, storageUploadDir),
   filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname)),
 });
 const upload = multer({ storage });

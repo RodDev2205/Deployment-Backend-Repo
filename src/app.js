@@ -28,7 +28,9 @@ app.use(cors({
   origin: "https://deployment-frontend-repo.vercel.app"
 }));
 app.use(express.json());
-app.use("/uploads", express.static(path.join(path.resolve(), "uploads")));
+// serve uploaded files from configurable directory (Railway volume mounted at /app/uploads)
+const uploadDir = process.env.UPLOAD_DIR || path.join(path.resolve(), "uploads");
+app.use("/uploads", express.static(uploadDir));
 
 // Register routes
 app.use("/api/admin", adminRoutes);

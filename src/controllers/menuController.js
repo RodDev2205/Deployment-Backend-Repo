@@ -4,9 +4,16 @@ import path from "path";
 
 // -------------------
 // Multer configuration
+// support configurable upload directory (Railway volume mounted at /app/uploads)
 // -------------------
+const uploadDir = process.env.UPLOAD_DIR || "uploads";
+
+// ensure directory exists when server starts
+import fs from "fs";
+fs.mkdirSync(uploadDir, { recursive: true });
+
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "uploads/"),
+  destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname)),
 });
 
