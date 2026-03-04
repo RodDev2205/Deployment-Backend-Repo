@@ -5,11 +5,11 @@ import { io } from "../../server.js"; // realtime notification
 export const updateUser = async (req, res) => {
   try {
     const userId = req.params.id;
-    const { full_name, username, password, branch_id } = req.body;
+    const { first_name, last_name, username, password, branch_id, contact_number } = req.body;
 
-    if (!full_name || !username || !branch_id) {
+    if (!first_name || !last_name || !username || !branch_id) {
       return res.status(400).json({
-        error: "Full name, username, and branch are required",
+        error: "First name, last name, username, and branch are required",
       });
     }
 
@@ -31,20 +31,21 @@ export const updateUser = async (req, res) => {
     let sql;
     let params;
 
+    // always update first_name, last_name, username, branch_id
     if (hashedPassword) {
       sql = `
         UPDATE users 
-        SET full_name = ?, username = ?, password = ?, branch_id = ?
+        SET first_name = ?, last_name = ?, username = ?, password = ?, branch_id = ?, contact_number = ?
         WHERE user_id = ?
       `;
-      params = [full_name, username, hashedPassword, branch_id, userId];
+      params = [first_name, last_name, username, hashedPassword, branch_id, contact_number || null, userId];
     } else {
       sql = `
         UPDATE users 
-        SET full_name = ?, username = ?, branch_id = ?
+        SET first_name = ?, last_name = ?, username = ?, branch_id = ?, contact_number = ?
         WHERE user_id = ?
       `;
-      params = [full_name, username, branch_id, userId];
+      params = [first_name, last_name, username, branch_id, contact_number || null, userId];
     }
 
     const [result] = await db.query(sql, params);
@@ -54,7 +55,7 @@ export const updateUser = async (req, res) => {
     }
 
     const [updatedUserRows] = await db.query(
-      "SELECT user_id, full_name, username, branch_id FROM users WHERE user_id = ?",
+      "SELECT user_id, first_name, last_name, username, branch_id, contact_number FROM users WHERE user_id = ?",
       [userId]
     );
 
@@ -80,7 +81,7 @@ export const getUser = async (req, res) => {
     const userId = req.params.id;
     const [rows] = await db.query(
       `
-      SELECT u.user_id, u.full_name, u.username, u.role_id, r.role_name,
+      SELECT u.user_id, u.first_name, u.last_name, u.username, u.contact_number, u.role_id, r.role_name,
              u.branch_id, u.status, u.created_at
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.role_id
@@ -103,7 +104,7 @@ export const getCurrentUser = async (req, res) => {
     const userId = req.user.user_id;
     const [rows] = await db.query(
       `
-      SELECT u.user_id, u.full_name, u.username, u.role_id, r.role_name,
+      SELECT u.user_id, u.first_name, u.last_name, u.username, u.contact_number, u.role_id, r.role_name,
              u.branch_id, u.status, u.created_at
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.role_id
