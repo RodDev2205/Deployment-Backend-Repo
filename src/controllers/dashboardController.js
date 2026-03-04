@@ -41,27 +41,31 @@ export async function getDashboardStats(req, res) {
     // superadmins can optionally specify ?creatorId=XYZ to look at
     // someone else's created accounts.  Everyone is still confined
     // to their branch (admins) or all branches (superadmin).
-    let empQuery = `SELECT COUNT(*) AS count FROM users WHERE role_id IN (1) AND status = 'Activate'`;
-    const empParams = [];
-    let creatorFilter = req.user.user_id;
+    let empQuery = `
+        SELECT COUNT(*) AS count
+        FROM users
+        WHERE status = 'Activate'
+        `;
 
-    if (role_id === 2 && req.query.creatorId) {
-      // allow superadmin to view another user's creations
-      creatorFilter = req.query.creatorId;
-    }
+        const empParams = [];
 
-    if (role_id !== 2) {
-      // restrict to branch and creator
-      empQuery += ` AND branch_id = ? AND created_by = ?`;
-      empParams.push(branchId, creatorFilter);
-    } else {
-      // superadmin: no branch restriction, but still filter by creator if provided
-      if (creatorFilter) {
-        empQuery += ` AND created_by = ?`;
-        empParams.push(creatorFilter);
-      }
-    }
-    const [[{ count: active_employees }]] = await db.execute(empQuery, empParams);
+        if (role_id === 3) {
+        // SUPERADMIN
+        // Can see role 1 and 2 across all branches
+        empQuery += ` AND role_id IN (1, 2)`;
+        } else {
+        // ADMIN
+        // Can only see role 1
+        empQuery += `
+            AND role_id = 1
+            AND branch_id = ?
+            AND created_by = ?
+        `;
+        empParams.push(branchId, req.user.user_id);
+        }
+
+        const [[{ count: active_employees }]] =
+        await db.execute(empQuery, empParams);
 
     // low stock count
     let lowQuery;
