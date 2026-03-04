@@ -75,14 +75,14 @@ export const getIngredientsByBranch = async (req, res) => {
         [branch_id]
       );
     } else {
-      // Pagination
+      // Pagination: LIMIT and OFFSET must be literal integers (not bound parameters)
       [rows] = await db.execute(
         `SELECT *
          FROM inventory
          WHERE branch_id = ?
          ORDER BY item_name ASC
-         LIMIT ? OFFSET ?`,
-        [branch_id, limit, offset]
+         LIMIT ${limit} OFFSET ${offset}`,
+        [branch_id]
       );
 
       [[{ total }]] = await db.execute(
