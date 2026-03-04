@@ -2,6 +2,7 @@ import { Router } from "express";
 import { createCashier, getCashiers, toggleCashierStatus, updateCashier, updateCashierPassword } from "../controllers/adminController.js";
 import { verifyToken } from "../middlewares/verifyToken.js";
 import { requireRole } from "../middlewares/requireRole.js";
+import { getpinCode } from "../controllers/voidController.js"
 
 const router = Router();
 
@@ -11,4 +12,5 @@ router.post("/cashiers", verifyToken, requireRole(2), createCashier);
 router.patch("/toggle/:id", verifyToken, requireRole(2), toggleCashierStatus);
 router.put("/cashiers/:id", verifyToken, requireRole(2), updateCashier);
 router.patch("/cashiers/:id/password", verifyToken, requireRole(2), updateCashierPassword);
+router.get("/pin-code", verifyToken, requireRole(2), getpinCode);
 export default router;

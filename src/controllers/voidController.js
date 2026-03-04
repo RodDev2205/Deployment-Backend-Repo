@@ -99,3 +99,17 @@ export const voidTransaction = async (req, res) => {
     connection.release();
   }
 };
+
+export const getpinCode = async (req, res) => {
+  const { user_id } = req.user;
+  try {
+    const [rows] = await db.query(
+      `SELECT pin_code FROM users WHERE user_id = ?`,
+      [user_id]
+    );
+    res.json(rows[0]);
+  } catch (error) {
+    console.error("DB ERROR (getpinCode):", error);
+    res.status(500).json({ message: "Database error", error: error.message });
+  }
+};
