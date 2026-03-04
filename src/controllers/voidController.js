@@ -2,7 +2,7 @@ import { db } from "../config/db.js";
 
 // record a void request and update transaction status
 export const voidTransaction = async (req, res) => {
-  const { transaction_id, reason, admin_pin } = req.body;
+  const { transaction_id, reason, admin_pin, void_items } = req.body;
   const cashier_id = req.user.user_id;
   const branch_id = req.user.branch_id;
 
@@ -33,35 +33,64 @@ export const voidTransaction = async (req, res) => {
       [transaction_id, cashier_id, admin.user_id, branch_id, reason]
     );
 
-    // fetch items sold in this transaction
-    const [items] = await connection.query(
+    // fetch all items sold in this transaction
+    const [allItems] = await connection.query(
       `SELECT menu_id, quantity FROM transaction_items WHERE transaction_id = ?`,
       [transaction_id]
     );
 
-    // restore inventory servings for each ingredient linked to each menu item
-    for (const item of items) {
+    // determine whether full or partial void
+    let itemsToVoid = [];
+    if (void_items && Object.keys(void_items).length > 0) {
+      // partial: object mapping menu_id->qty
+      itemsToVoid = allItems.map(it => ({
+        ...it,
+        void_qty: Math.min(it.quantity, Number(void_items[it.menu_id] || 0))
+      })).filter(it => it.void_qty > 0);
+    } else {
+      // full void
+      itemsToVoid = allItems.map(it => ({ ...it, void_qty: it.quantity }));
+    }
+
+    // restore inventory and decrement transaction_items quantities
+    for (const item of itemsToVoid) {
       const [ingredients] = await connection.query(
         `SELECT inventory_id, servings_required FROM menu_inventory WHERE product_id = ?`,
         [item.menu_id]
       );
       for (const ing of ingredients) {
-        const restoreAmount = ing.servings_required * item.quantity;
+        const restoreAmount = ing.servings_required * item.void_qty;
         await connection.query(
           `UPDATE inventory SET total_servings = total_servings + ? WHERE inventory_id = ?`,
           [restoreAmount, ing.inventory_id]
         );
       }
+      // subtract voided quantity from transaction_items
+      await connection.query(
+        `UPDATE transaction_items
+         SET quantity = GREATEST(0, quantity - ?)
+         WHERE transaction_id = ? AND menu_id = ?`,
+        [item.void_qty, transaction_id, item.menu_id]
+      );
     }
 
-    // update transaction status to voided
+    // update transaction status appropriately
+    let newStatus;
+    if (!void_items || Object.keys(void_items).length === 0) {
+      newStatus = 'Voided';
+    } else {
+      // check if all items fully voided
+      const remaining = itemsToVoid.reduce((sum, it) => sum + (it.quantity - it.void_qty), 0);
+      newStatus = remaining === 0 ? 'Voided' : 'Partial Voided';
+    }
+
     await connection.query(
-      `UPDATE transactions SET status = 'Voided' WHERE transaction_id = ?`,
-      [transaction_id]
+      `UPDATE transactions SET status = ? WHERE transaction_id = ?`,
+      [newStatus, transaction_id]
     );
 
     await connection.commit();
-    res.json({ success: true, void_id: result.insertId, status: 'Voided' });
+    res.json({ success: true, void_id: result.insertId, status: newStatus });
   } catch (error) {
     await connection.rollback();
     console.error("VOIDS ERROR:", error);
