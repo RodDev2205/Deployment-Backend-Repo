@@ -47,15 +47,20 @@ export const addIngredient = async (req, res) => {
 // GET ingredients for the current user's branch
 export const getIngredientsByBranch = async (req, res) => {
   try {
-    const branch_id = req.user.branch_id;
+    const branch_id = Number(req.user.branch_id);
+    if (isNaN(branch_id)) {
+      return res.status(400).json({ message: "Invalid branch_id" });
+    }
 
-    // Get pagination values from query
-    const page = parseInt(req.query.page) || null;
-    const limit = parseInt(req.query.limit) || null;
+    const page = parseInt(req.query.page) || 1;      // default to page 1
+    const limit = parseInt(req.query.limit) || 10;   // default to 10 items per page
+    const offset = (page - 1) * limit;
 
-    // If no pagination → return all (for inventory page)
-    if (!page || !limit) {
-      const [rows] = await db.execute(
+    let rows, total;
+
+    if (!req.query.page || !req.query.limit) {
+      // No pagination → return all
+      [rows] = await db.execute(
         `SELECT *
          FROM inventory
          WHERE branch_id = ?
@@ -63,28 +68,30 @@ export const getIngredientsByBranch = async (req, res) => {
         [branch_id]
       );
 
-      return res.status(200).json(rows);
+      [[{ total }]] = await db.execute(
+        `SELECT COUNT(*) as total
+         FROM inventory
+         WHERE branch_id = ?`,
+        [branch_id]
+      );
+    } else {
+      // Pagination
+      [rows] = await db.execute(
+        `SELECT *
+         FROM inventory
+         WHERE branch_id = ?
+         ORDER BY item_name ASC
+         LIMIT ? OFFSET ?`,
+        [branch_id, limit, offset]
+      );
+
+      [[{ total }]] = await db.execute(
+        `SELECT COUNT(*) as total
+         FROM inventory
+         WHERE branch_id = ?`,
+        [branch_id]
+      );
     }
-
-    // If pagination requested → apply LIMIT + OFFSET
-    const offset = (page - 1) * limit;
-
-    const [rows] = await db.execute(
-      `SELECT *
-       FROM inventory
-       WHERE branch_id = ?
-       ORDER BY item_name ASC
-       LIMIT ? OFFSET ?`,
-      [branch_id, limit, offset]
-    );
-
-    // Also get total count for pagination control
-    const [[{ total }]] = await db.execute(
-      `SELECT COUNT(*) as total
-       FROM inventory
-       WHERE branch_id = ?`,
-      [branch_id]
-    );
 
     res.status(200).json({
       data: rows,
