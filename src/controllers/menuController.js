@@ -46,13 +46,21 @@ export const getAllProducts = async (req, res) => {
       baseQuery += " AND p.menu_status = 'active'";
     }
 
+    console.log("getAllProducts query=", baseQuery, "params=", params);
     const [rows] = await db.query(baseQuery, params);
+    console.log("getAllProducts returned", rows.length, "rows");
 
     res.json(rows);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
   }
+};
+
+// wrapper for archived tab
+export const getArchivedProducts = async (req, res) => {
+  req.query.menu_status = 'archived';
+  return getAllProducts(req, res);
 };
 
 

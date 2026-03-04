@@ -1,6 +1,7 @@
 import express from "express";
 import { 
   getAllProducts, 
+  getArchivedProducts,
   createProduct, 
   updateProduct, 
   deleteProduct, 
@@ -14,6 +15,7 @@ import { requireRole } from "../middlewares/requireRole.js";
 const router = express.Router();
 
 router.get("/", verifyToken, requireRole(2, 1), getAllProducts);
+router.get("/archived", verifyToken, requireRole(2, 1), getArchivedProducts);
 router.get("/:product_id/inventory", verifyToken, requireRole(2, 1), getMenuInventoryByProduct);
 router.post("/", verifyToken, requireRole(2, 1), upload.single("image"), createProduct);
 router.put("/:id", verifyToken, requireRole(2, 1), upload.single("image"), updateProduct);
