@@ -6,12 +6,17 @@ export const getAdmin = async (req, res) => {
     const [rows] = await db.query(`
       SELECT 
         u.user_id AS id,
-        u.full_name AS name,
+        u.first_name,
+        u.last_name,
         b.branch_name AS branch,
         u.username,
-        u.status
+        u.contact_number,
+        u.status,
+        u.created_at,
+        created_user.username AS created_by
       FROM users u
       LEFT JOIN branches b ON u.branch_id = b.branch_id
+      LEFT JOIN users created_user ON u.created_by = created_user.user_id
       WHERE u.role_id = 2
       ORDER BY u.user_id DESC
     `);
@@ -28,12 +33,17 @@ export const getCashiers = async (req, res) => {
     const [rows] = await db.query(`
       SELECT 
         u.user_id AS id,
-        u.full_name AS name,
+        u.first_name,
+        u.last_name,
         b.branch_name AS branch,
         u.username,
-        u.status
+        u.contact_number,
+        u.status,
+        u.created_at,
+        created_user.username AS created_by
       FROM users u
       LEFT JOIN branches b ON u.branch_id = b.branch_id
+      LEFT JOIN users created_user ON u.created_by = created_user.user_id
       WHERE u.role_id = 1
       ORDER BY u.user_id DESC
     `);
@@ -161,12 +171,17 @@ export const getStaffByBranch = async (req, res) => {
     const [rows] = await db.execute(
       `SELECT 
           u.user_id, 
-          u.full_name AS name, 
+          u.first_name,
+          u.last_name,
           u.role_id,
           r.role_name,
-          u.status
+          u.contact_number,
+          u.status,
+          u.created_at,
+          created_user.username AS created_by
        FROM users u
        JOIN roles r ON u.role_id = r.role_id
+       LEFT JOIN users created_user ON u.created_by = created_user.user_id
        WHERE u.branch_id = ?`,
       [branch_id]
     );
@@ -185,15 +200,20 @@ export const getAllStaff = async (req, res) => {
     const [rows] = await db.execute(
       `SELECT 
           u.user_id, 
-          u.full_name AS name,
+          u.first_name,
+          u.last_name,
           u.role_id,
           r.role_name,
+          u.contact_number,
           u.status,
+          u.created_at,
+          created_user.username AS created_by,
           u.branch_id,
           b.branch_name
        FROM users u
        JOIN roles r ON u.role_id = r.role_id
        LEFT JOIN branches b ON u.branch_id = b.branch_id
+       LEFT JOIN users created_user ON u.created_by = created_user.user_id
        WHERE u.role_id IN (1,2)`
     );
 
