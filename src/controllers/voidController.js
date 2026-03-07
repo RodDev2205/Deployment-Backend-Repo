@@ -6,6 +6,8 @@ export const voidTransaction = async (req, res) => {
   const cashier_id = req.user.user_id;
   const branch_id = req.user.branch_id;
 
+  console.log("Void request received:", { transaction_id, reason, admin_pin: admin_pin ? "***" : null, void_items, cashier_id, branch_id });
+
   if (!transaction_id || !reason || !admin_pin) {
     return res.status(400).json({ message: "transaction_id, reason and admin_pin are required" });
   }
@@ -20,6 +22,8 @@ export const voidTransaction = async (req, res) => {
        WHERE pin_code = ? AND role_id IN (2,3) AND status = 'Activate'`,
       [admin_pin]
     );
+
+    console.log("Admin lookup result:", admin ? "Found admin" : "No admin found");
 
     if (!admin) {
       await connection.rollback();
