@@ -85,7 +85,7 @@ export const voidTransaction = async (req, res) => {
     } else {
       // check if all items fully voided
       const remaining = itemsToVoid.reduce((sum, it) => sum + (it.quantity - it.void_qty), 0);
-      newStatus = remaining === 0 ? 'Voided' : 'Partial';
+      newStatus = remaining === 0 ? 'Voided' : 'Partial Voided';
     }
 
     await connection.query(
