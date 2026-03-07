@@ -25,7 +25,10 @@ dotenv.config();
 const app = express();
 
 app.use(cors({
-  origin: "https://deployment-frontend-repo.vercel.app"
+  origin: [
+    "http://localhost:5173",
+    "https://deployment-frontend-repo.vercel.app"
+  ]
 }));
 app.use(express.json());
 // serve uploaded files from configurable directory (Railway volume mounted at /app/uploads)
