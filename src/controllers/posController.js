@@ -165,8 +165,8 @@ export const completeSale = async (req, res) => {
 
     const [transactionResult] = await connection.query(
       `INSERT INTO transactions 
-       (transaction_number, subtotal, discount_type, discount_value, discount_amount, total_amount, payment_method, amount_paid, change_amount, cashier_id, branch_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (transaction_number, subtotal, discount_type, discount_value, discount_amount, total_amount, payment_method, amount_paid, change_amount, cashier_id, branch_id, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         transactionNumber,
         subtotal,
@@ -179,6 +179,7 @@ export const completeSale = async (req, res) => {
         changeAmount,
         user.user_id,
         user.branch_id,
+        'Completed',
       ]
     );
 
