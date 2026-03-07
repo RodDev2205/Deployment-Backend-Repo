@@ -238,44 +238,168 @@ export const getUserTransactions = async (req, res) => {
   }
 };
 
-// GET detailed information for single transaction (must belong to same branch/user)
-export const getTransactionDetails = async (req, res) => {
-  try {
-    const transactionId = req.params.id;
-    const userId = req.user.user_id;
-    const branchId = req.user.branch_id;
+// VOID transaction (full or partial)
+export const voidTransaction = async (req, res) => {
+  const { transaction_id, reason, admin_pin, void_items } = req.body;
+  const user = req.user; // From JWT token
 
-    // Fetch transaction header
-    const [[transaction]] = await db.query(
-      `SELECT t.*, u.username AS cashier_name, b.branch_name
-       FROM transactions t
-       LEFT JOIN users u ON t.cashier_id = u.user_id
-       LEFT JOIN branches b ON t.branch_id = b.branch_id
-       WHERE t.transaction_id = ? AND t.branch_id = ?`,
-      [transactionId, branchId]
+  if (!transaction_id || !reason || !admin_pin) {
+    return res.status(400).json({ success: false, message: "Transaction ID, reason, and admin PIN are required" });
+  }
+
+  const connection = await db.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    // Verify admin PIN
+    const [adminRows] = await connection.query(
+      `SELECT user_id FROM users WHERE user_id = ? AND role_id IN (2, 3)`,
+      [user.user_id]
     );
 
-    if (!transaction) {
-      return res.status(404).json({ message: "Transaction not found" });
+    if (!adminRows.length) {
+      await connection.rollback();
+      return res.status(403).json({ success: false, message: "Only admins can void transactions" });
     }
 
-    // Optional: ensure cashier match so user only sees their own (admins could see all branch transactions)
-    if (transaction.cashier_id !== userId && req.user.role_id !== 3) {
-      return res.status(403).json({ message: "Not authorized" });
+    // Get transaction details
+    const [transactionRows] = await connection.query(
+      `SELECT t.*, TIMESTAMPDIFF(MINUTE, t.created_at, NOW()) as minutes_elapsed
+       FROM transactions t
+       WHERE t.transaction_id = ? AND t.branch_id = ?`,
+      [transaction_id, user.branch_id]
+    );
+
+    if (!transactionRows.length) {
+      await connection.rollback();
+      return res.status(404).json({ success: false, message: "Transaction not found" });
     }
 
-    // Fetch items
-    const [items] = await db.query(
+    const transaction = transactionRows[0];
+
+    // Check if void is allowed
+    if (transaction.status !== 'Completed') {
+      await connection.rollback();
+      return res.status(400).json({ success: false, message: "Only completed transactions can be voided" });
+    }
+
+    if (transaction.minutes_elapsed > 60) {
+      await connection.rollback();
+      return res.status(400).json({ success: false, message: "Void not allowed after 1 hour" });
+    }
+
+    // Get transaction items
+    const [itemsRows] = await connection.query(
       `SELECT ti.*, p.product_name
        FROM transaction_items ti
        LEFT JOIN products p ON ti.menu_id = p.product_id
        WHERE ti.transaction_id = ?`,
-      [transactionId]
+      [transaction_id]
     );
 
-    res.status(200).json({ transaction, items });
+    // Determine void type and items to void
+    let voidType = 'full';
+    let itemsToVoid = itemsRows;
+
+    if (void_items && Object.keys(void_items).length > 0) {
+      voidType = 'partial';
+      // Filter items that are being voided
+      itemsToVoid = itemsRows.filter(item => void_items[item.menu_id] > 0);
+    }
+
+    // Restore inventory for voided items
+    for (const item of itemsToVoid) {
+      const voidQty = voidType === 'full' ? item.quantity : (void_items[item.menu_id] || 0);
+
+      if (voidQty <= 0) continue;
+
+      // Get ingredients for this product
+      const [ingredientRows] = await connection.query(
+        `SELECT inventory_id, servings_required FROM menu_inventory WHERE product_id = ?`,
+        [item.menu_id]
+      );
+
+      // Restore servings
+      for (const ingredient of ingredientRows) {
+        const servingsToRestore = ingredient.servings_required * voidQty;
+
+        // Restore servings
+        await connection.query(
+          `UPDATE inventory SET total_servings = total_servings + ? WHERE inventory_id = ?`,
+          [servingsToRestore, ingredient.inventory_id]
+        );
+
+        // Recompute quantity
+        const [[inventoryRow]] = await connection.query(
+          `SELECT quantity, servings_per_unit, total_servings, low_stock_threshold FROM inventory WHERE inventory_id = ?`,
+          [ingredient.inventory_id]
+        );
+
+        if (inventoryRow) {
+          const { servings_per_unit, total_servings, low_stock_threshold } = inventoryRow;
+          const newQty = Math.floor(total_servings / servings_per_unit);
+
+          // Determine status
+          let newStatus = 'available';
+          if (newQty <= 0) newStatus = 'out_of_stock';
+          else if (low_stock_threshold != null && newQty <= Number(low_stock_threshold)) newStatus = 'low_stock';
+
+          await connection.query(
+            `UPDATE inventory SET quantity = ?, status = ? WHERE inventory_id = ?`,
+            [newQty, newStatus, ingredient.inventory_id]
+          );
+        }
+      }
+    }
+
+    // Update transaction status
+    const newStatus = voidType === 'full' ? 'Voided' : 'Partial Voided';
+    await connection.query(
+      `UPDATE transactions SET status = ? WHERE transaction_id = ?`,
+      [newStatus, transaction_id]
+    );
+
+    // Log void action
+    await connection.query(
+      `INSERT INTO transaction_logs (transaction_id, action, performed_by, reason, details)
+       VALUES (?, 'void', ?, ?, ?)`,
+      [transaction_id, user.user_id, reason, JSON.stringify({
+        void_type: voidType,
+        void_items: void_items || null,
+        original_status: transaction.status
+      })]
+    );
+
+    // For partial void, update refunded quantities
+    if (voidType === 'partial') {
+      for (const [menuId, qty] of Object.entries(void_items)) {
+        if (qty > 0) {
+          await connection.query(
+            `UPDATE transaction_items SET refunded_qty = COALESCE(refunded_qty, 0) + ? WHERE transaction_id = ? AND menu_id = ?`,
+            [qty, transaction_id, menuId]
+          );
+        }
+      }
+    }
+
+    await connection.commit();
+
+    // Emit dashboard updates
+    io.to(`branch_${user.branch_id}`).emit('dashboardUpdate', { branch_id: user.branch_id });
+    io.emit('dashboardUpdate', { branch_id: user.branch_id });
+
+    res.json({
+      success: true,
+      message: `Transaction ${voidType === 'full' ? 'fully' : 'partially'} voided successfully`,
+      status: newStatus
+    });
+
   } catch (error) {
-    console.error("DB ERROR (getTransactionDetails):", error);
-    res.status(500).json({ message: "Database error", error: error.message });
+    await connection.rollback();
+    console.error("Void Error:", error);
+    res.status(500).json({ success: false, message: "Server error: " + error.message });
+  } finally {
+    connection.release();
   }
 };
