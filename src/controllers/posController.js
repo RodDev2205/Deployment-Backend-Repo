@@ -396,7 +396,7 @@ export const voidTransaction = async (req, res) => {
     }
 
     // Update transaction status
-    const newStatus = voidType === 'full' ? 'Voided' : 'Partial Voided';
+    const newStatus = voidType === 'full' ? 'Voided' : 'Partial';
     await connection.query(
       `UPDATE transactions SET status = ? WHERE transaction_id = ?`,
       [newStatus, transaction_id]
