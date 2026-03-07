@@ -238,6 +238,48 @@ export const getUserTransactions = async (req, res) => {
   }
 };
 
+// GET detailed information for single transaction (must belong to same branch/user)
+export const getTransactionDetails = async (req, res) => {
+  try {
+    const transactionId = req.params.id;
+    const userId = req.user.user_id;
+    const branchId = req.user.branch_id;
+
+    // Fetch transaction header
+    const [[transaction]] = await db.query(
+      `SELECT t.*, u.username AS cashier_name, b.branch_name
+       FROM transactions t
+       LEFT JOIN users u ON t.cashier_id = u.user_id
+       LEFT JOIN branches b ON t.branch_id = b.branch_id
+       WHERE t.transaction_id = ? AND t.branch_id = ?`,
+      [transactionId, branchId]
+    );
+
+    if (!transaction) {
+      return res.status(404).json({ message: "Transaction not found" });
+    }
+
+    // Optional: ensure cashier match so user only sees their own (admins could see all branch transactions)
+    if (transaction.cashier_id !== userId && req.user.role_id !== 3) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    // Fetch items
+    const [items] = await db.query(
+      `SELECT ti.*, p.product_name
+       FROM transaction_items ti
+       LEFT JOIN products p ON ti.menu_id = p.product_id
+       WHERE ti.transaction_id = ?`,
+      [transactionId]
+    );
+
+    res.status(200).json({ transaction, items });
+  } catch (error) {
+    console.error("DB ERROR (getTransactionDetails):", error);
+    res.status(500).json({ message: "Database error", error: error.message });
+  }
+};
+
 // VOID transaction (full or partial)
 export const voidTransaction = async (req, res) => {
   const { transaction_id, reason, admin_pin, void_items } = req.body;
