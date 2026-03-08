@@ -182,6 +182,61 @@ export const getSalesTodayByBranch = async (req, res) => {
   }
 };
 
+// Get void tracking for staff who voided transactions
+export const getVoidTracking = async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const { startDate, endDate } = req.query;
+  const branch_id = req.user.branch_id;
+  const role_id = req.user.role_id;
+
+  try {
+    let whereClause = '';
+    const params = [];
+
+    if (startDate && endDate) {
+      whereClause = ' AND DATE(v.void_time) BETWEEN ? AND ?';
+      params.push(startDate, endDate);
+    }
+
+    if (role_id === 2) {
+      whereClause += ' AND v.branch_id = ?';
+      params.push(branch_id);
+    }
+
+    const query = `
+      SELECT 
+        t.transaction_number,
+        u.name AS cashier,
+        CASE 
+          WHEN t.status = 'Voided' THEN 'Full Void'
+          ELSE COALESCE(p.product_name, CONCAT('Menu ID: ', ti.menu_id))
+        END AS item,
+        CASE 
+          WHEN t.status = 'Voided' THEN t.total_amount
+          ELSE (ti.voided_quantity * ti.price)
+        END AS amount,
+        CASE 
+          WHEN t.status = 'Voided' THEN 'Voided'
+          ELSE 'Partial Voided'
+        END AS type,
+        v.reason
+      FROM voids v
+      JOIN transactions t ON v.transaction_id = t.transaction_id
+      LEFT JOIN transaction_items ti ON ti.transaction_id = t.transaction_id AND ti.voided_quantity > 0
+      LEFT JOIN users u ON u.user_id = v.cashier_id
+      LEFT JOIN products p ON p.product_id = ti.menu_id
+      WHERE 1=1 ${whereClause}
+      ORDER BY v.void_time DESC
+    `;
+
+    const [results] = await db.query(query, params);
+    res.json(results || []);
+  } catch (error) {
+    console.error("GET VOID TRACKING ERROR:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
 // Get breakdown of transaction statuses (Completed, Voided, Partial Voided) over a date range
 export const getPaymentMethodBreakdown = async (req, res) => {
   try {

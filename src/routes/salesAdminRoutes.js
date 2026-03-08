@@ -6,7 +6,8 @@ import {
   getSalesTodayByBranch,
   getSalesByPeriod,
   getPaymentMethodBreakdown,
-  getTopProductsByBranch
+  getTopProductsByBranch,
+  getVoidTracking
 } from "../controllers/salesAdminController.js";
 import { getSalesTrend } from "../controllers/salesTrendController.js";import { getBranchComparison } from "../controllers/salesBranchComparisonController.js";
 const router = express.Router();
@@ -30,5 +31,8 @@ router.get("/daily-sales", requireRole(2, 3), getDailySalesByBranch);
 
 // Get today's sales summary (admin/superadmin only)
 router.get("/today-sales", requireRole(2, 3), getSalesTodayByBranch);
+
+// Get void tracking (admin/superadmin only)
+router.get("/void-tracking", requireRole(2, 3), getVoidTracking);
 
 export default router;
