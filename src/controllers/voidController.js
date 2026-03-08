@@ -56,6 +56,9 @@ export const voidTransaction = async (req, res) => {
       itemsToVoid = allItems.map(it => ({ ...it, void_qty: it.quantity }));
     }
 
+    console.log("allItems:", allItems);
+    console.log("itemsToVoid:", itemsToVoid);
+
     // restore inventory and decrement transaction_items quantities
     for (const item of itemsToVoid) {
       const [ingredients] = await connection.query(
@@ -84,6 +87,7 @@ export const voidTransaction = async (req, res) => {
       `SELECT COALESCE(SUM(quantity), 0) as totalRemaining FROM transaction_items WHERE transaction_id = ?`,
       [transaction_id]
     );
+    console.log("totalRemaining:", totalRemaining);
     const newStatus = totalRemaining === 0 ? 'Voided' : 'Partial Voided';
 
     await connection.query(

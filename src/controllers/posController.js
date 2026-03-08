@@ -297,13 +297,14 @@ export const voidTransaction = async (req, res) => {
 
     // Verify admin PIN
     const [adminRows] = await connection.query(
-      `SELECT user_id FROM users WHERE user_id = ? AND role_id IN (2, 3)`,
-      [user.user_id]
+      `SELECT user_id FROM users
+       WHERE pin_code = ? AND role_id IN (2,3) AND status = 'Activate'`,
+      [admin_pin]
     );
 
     if (!adminRows.length) {
       await connection.rollback();
-      return res.status(403).json({ success: false, message: "Only admins can void transactions" });
+      return res.status(403).json({ success: false, message: "Invalid admin PIN" });
     }
 
     // Get transaction details
@@ -322,9 +323,9 @@ export const voidTransaction = async (req, res) => {
     const transaction = transactionRows[0];
 
     // Check if void is allowed
-    if (transaction.status !== 'Completed') {
+    if (transaction.status !== 'Completed' && transaction.status !== 'Partial Voided') {
       await connection.rollback();
-      return res.status(400).json({ success: false, message: "Only completed transactions can be voided" });
+      return res.status(400).json({ success: false, message: "Only completed or partially voided transactions can be voided" });
     }
 
     if (transaction.minutes_elapsed > 60) {
@@ -350,6 +351,9 @@ export const voidTransaction = async (req, res) => {
       // Filter items that are being voided
       itemsToVoid = itemsRows.filter(item => void_items[item.menu_id] > 0);
     }
+
+    console.log("itemsRows:", itemsRows);
+    console.log("itemsToVoid:", itemsToVoid);
 
     // Restore inventory for voided items
     for (const item of itemsToVoid) {
@@ -397,7 +401,12 @@ export const voidTransaction = async (req, res) => {
     }
 
     // Update transaction status
-    const newStatus = voidType === 'full' ? 'Voided' : 'Partial';
+    const [[{totalRemaining}]] = await connection.query(
+      `SELECT COALESCE(SUM(quantity), 0) as totalRemaining FROM transaction_items WHERE transaction_id = ?`,
+      [transaction_id]
+    );
+    console.log("totalRemaining:", totalRemaining);
+    const newStatus = totalRemaining === 0 ? 'Voided' : 'Partial Voided';
     await connection.query(
       `UPDATE transactions SET status = ? WHERE transaction_id = ?`,
       [newStatus, transaction_id]
