@@ -1,6 +1,21 @@
 import { db } from "../config/db.js";
 import bcrypt from "bcrypt";
 
+// Helper function to log admin activities
+async function logAdminActivity({ userId, branchId, activityType, description, referenceId }) {
+  try {
+    await db.query(
+      `INSERT INTO activity_logs
+        (user_id, branch_id, activity_type, reference_id, description)
+       VALUES (?, ?, ?, ?, ?)`,
+      [userId, branchId, activityType, referenceId, description]
+    );
+  } catch (err) {
+    console.error('Failed to log admin activity:', err);
+    // Don't throw error to avoid breaking the main operation
+  }
+}
+
 export const createCashier = async (req, res) => {
   try {
     const adminId = req.user.user_id; // from JWT
@@ -27,6 +42,16 @@ export const createCashier = async (req, res) => {
        VALUES (?, ?, ?, ?, 1, 'Activate', ?, ?, ?)`,
       [first_name, last_name, username, hashedPassword, branchId, contact_number || null, adminId]
     );
+
+    // Log the activity
+    const [result] = await db.query("SELECT LAST_INSERT_ID() as userId");
+    await logAdminActivity({
+      userId: adminId,
+      branchId: branchId,
+      activityType: 'cashier_created',
+      description: `Created new cashier: ${first_name} ${last_name} (${username})`,
+      referenceId: result[0].userId
+    });
 
     res.json({ message: "Cashier created successfully" });
 
@@ -91,6 +116,17 @@ export const toggleCashierStatus = async (req, res) => {
       [newStatus, id, branchId]
     );
 
+    // Log the activity
+    const actionType = newStatus === 'Activate' ? 'cashier_activated' : 'cashier_deactivated';
+    const actionDesc = newStatus === 'Activate' ? 'Activated' : 'Deactivated';
+    await logAdminActivity({
+      userId: req.user.user_id,
+      branchId: branchId,
+      activityType: actionType,
+      description: `${actionDesc} cashier ID: ${id}`,
+      referenceId: id
+    });
+
     res.json({ message: "Status updated successfully", status: newStatus });
 
   } catch (err) {
@@ -129,6 +165,15 @@ export const updateCashier = async (req, res) => {
       return res.status(404).json({ error: "Cashier not found or access denied" });
     }
 
+    // Log the activity
+    await logAdminActivity({
+      userId: req.user.user_id,
+      branchId: branchId,
+      activityType: 'cashier_updated',
+      description: `Updated cashier credentials: ${first_name} ${last_name} (${username})`,
+      referenceId: id
+    });
+
     res.json({ message: "Cashier updated successfully", first_name, last_name, username, contact_number, id });
   } catch (err) {
     res.status(500).json({ error: "Failed to update cashier", details: err.message });
@@ -155,6 +200,15 @@ export const updateCashierPassword = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: "Cashier not found or access denied" });
     }
+
+    // Log the activity
+    await logAdminActivity({
+      userId: req.user.user_id,
+      branchId: branchId,
+      activityType: 'cashier_password_reset',
+      description: `Reset password for cashier ID: ${id}`,
+      referenceId: id
+    });
 
     res.json({ message: "Password updated successfully", id });
   } catch (err) {
