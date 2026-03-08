@@ -87,13 +87,16 @@ export const voidTransaction = async (req, res) => {
       `SELECT COALESCE(SUM(quantity), 0) as totalRemaining FROM transaction_items WHERE transaction_id = ?`,
       [transaction_id]
     );
-    console.log("totalRemaining:", totalRemaining);
-    const newStatus = totalRemaining === 0 ? 'Voided' : 'Partial Voided';
+    const totalRemainingNum = Number(totalRemaining) || 0;
+    console.log("totalRemainingNum:", totalRemainingNum);
+    const newStatus = totalRemainingNum === 0 ? 'Voided' : 'Partial Voided';
 
     await connection.query(
       `UPDATE transactions SET status = ? WHERE transaction_id = ?`,
       [newStatus, transaction_id]
     );
+
+    console.log("Updated status to:", newStatus);
 
     await connection.commit();
     res.json({ success: true, void_id: result.insertId, status: newStatus });

@@ -185,6 +185,8 @@ export const completeSale = async (req, res) => {
 
     const transactionId = transactionResult.insertId;
 
+    console.log(`Transaction created with ID: ${transactionId}, Status: 'Completed'`);
+
     // ==================== STEP 6: Insert transaction items ====================
     for (const item of transactionItemsData) {
       await connection.query(
@@ -411,6 +413,8 @@ export const voidTransaction = async (req, res) => {
       `UPDATE transactions SET status = ? WHERE transaction_id = ?`,
       [newStatus, transaction_id]
     );
+
+    console.log("Updated status to:", newStatus);
 
     // Log void action
     await connection.query(
