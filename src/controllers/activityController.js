@@ -20,3 +20,31 @@ export const getActivityLogs = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch activity logs" });
   }
 };
+
+// GET /api/activity/login-logs
+export const getLoginLogs = async (req, res) => {
+  try {
+    const { branch_id, role_id } = req.user;
+    let query = `
+      SELECT ll.log_id, ll.username_attempted AS user, 'Security' AS type, 
+             CASE WHEN ll.status = 'SUCCESS' THEN 'Login Success' ELSE 'Login Failed' END AS action,
+             ll.reason AS details, ll.ip_address, ll.timestamp,
+             CASE WHEN ll.status = 'SUCCESS' THEN 'Info' ELSE 'Warning' END AS severity
+      FROM login_logs ll
+    `;
+    const params = [];
+
+    if (role_id === 2) {
+      query += ` WHERE ll.branch_id = ?`;
+      params.push(branch_id);
+    }
+
+    query += ` ORDER BY ll.timestamp DESC LIMIT 500`;
+
+    const [rows] = await db.query(query, params);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch login logs" });
+  }
+};
