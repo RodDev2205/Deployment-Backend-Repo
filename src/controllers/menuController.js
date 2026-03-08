@@ -2,6 +2,21 @@ import { db } from "../config/db.js";
 import multer from "multer";
 import path from "path";
 
+// Helper function to log menu activities
+async function logMenuActivity({ userId, branchId, activityType, description, referenceId }) {
+  try {
+    await db.query(
+      `INSERT INTO activity_logs
+        (user_id, branch_id, activity_type, description, reference_id)
+       VALUES (?, ?, ?, ?, ?)`,
+      [userId, branchId, activityType, description, referenceId]
+    );
+  } catch (err) {
+    console.error('Failed to log menu activity:', err);
+    // Don't throw error to avoid breaking the main operation
+  }
+}
+
 // -------------------
 // Multer configuration
 // support configurable upload directory (Railway volume mounted at /app/uploads)
@@ -148,6 +163,15 @@ export const createProduct = async (req, res) => {
 
     await connection.commit();
 
+    // Log the menu item creation
+    await logMenuActivity({
+      userId: created_by,
+      branchId: branch_id,
+      activityType: 'menu_item_created',
+      description: `Created new menu item: ${product_name}`,
+      referenceId: productId
+    });
+
     res.status(201).json({ message: "Product created successfully", product_id: productId });
 
   } catch (err) {
@@ -232,6 +256,15 @@ export const updateProduct = async (req, res) => {
 
     await connection.commit();
 
+    // Log the menu item update
+    await logMenuActivity({
+      userId: req.user.user_id,
+      branchId: req.user.branch_id,
+      activityType: 'menu_item_updated',
+      description: `Updated menu item: ${product_name}`,
+      referenceId: id
+    });
+
     // Return the updated product including category_name
     const [row] = await db.query(
       `SELECT p.product_id, p.product_name, p.price, p.status, p.menu_status, p.approval_status, p.category_id,
@@ -258,9 +291,27 @@ export const updateProduct = async (req, res) => {
 export const deleteProduct = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Get product info before deletion for logging
+    const [productInfo] = await db.query(
+      'SELECT product_name FROM products WHERE product_id = ?',
+      [id]
+    );
+
     const [result] = await db.query("DELETE FROM products WHERE product_id=?", [id]);
 
     if (result.affectedRows === 0) return res.status(404).json({ message: "Product not found" });
+
+    // Log the menu item deletion
+    if (productInfo.length > 0) {
+      await logMenuActivity({
+        userId: req.user.user_id,
+        branchId: req.user.branch_id,
+        activityType: 'menu_item_deleted',
+        description: `Deleted menu item: ${productInfo[0].product_name}`,
+        referenceId: id
+      });
+    }
 
     res.json({ message: "Product deleted successfully", product_id: id });
   } catch (err) {
@@ -382,6 +433,15 @@ export const editDeclinedProduct = async (req, res) => {
     }
 
     await connection.commit();
+
+    // Log the declined product edit
+    await logMenuActivity({
+      userId: userId,
+      branchId: branchId,
+      activityType: 'declined_menu_item_edited',
+      description: `Edited declined menu item for resubmission: ${product_name}`,
+      referenceId: id
+    });
 
     // Return updated product with category name
     const [row] = await db.query(
