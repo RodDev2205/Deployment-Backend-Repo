@@ -37,20 +37,19 @@ export const createCashier = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    await db.query(
+    const [result] = await db.query(
       `INSERT INTO users (first_name, last_name, username, password, role_id, status, branch_id, contact_number, created_by)
        VALUES (?, ?, ?, ?, 1, 'Activate', ?, ?, ?)`,
       [first_name, last_name, username, hashedPassword, branchId, contact_number || null, adminId]
     );
 
     // Log the activity
-    const [result] = await db.query("SELECT LAST_INSERT_ID() as userId");
     await logAdminActivity({
       userId: adminId,
       branchId: branchId,
       activityType: 'cashier_created',
       description: `Created new cashier: ${first_name} ${last_name} (${username})`,
-      referenceId: result[0].userId
+      referenceId: result.insertId
     });
 
     res.json({ message: "Cashier created successfully" });
