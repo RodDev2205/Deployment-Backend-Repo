@@ -128,9 +128,12 @@ export const getSalesTodayByBranch = async (req, res) => {
 
     // Calculate gross_sales and voided_sales from transaction_items
     let itemsQuery = `
-      SELECT 
+      SELECT
         SUM((ti.quantity - ti.voided_quantity) * ti.price) as gross_sales,
         SUM(ti.voided_quantity * ti.price) as voided_sales
+      FROM transaction_items ti
+      INNER JOIN transactions t ON ti.transaction_id = t.transaction_id
+      WHERE DATE(t.created_at) = CURDATE()
     `;
 
     let params = [];
