@@ -4,16 +4,17 @@ import { io } from "../../server.js"; // used to notify realtime updates
 // Helper function to log POS activities
 async function logPOSActivity({ userId, branchId, activityType, description, referenceId }) {
   try {
-    console.log(`📝 Attempting to log POS activity: ${activityType}`);
-    await db.query(
+    console.log(`📝 Attempting to log POS activity: ${activityType} for user ${userId}`);
+    const result = await db.query(
       `INSERT INTO activity_logs
         (user_id, branch_id, activity_type, reference_id, description)
        VALUES (?, ?, ?, ?, ?)`,
       [userId, branchId, activityType, referenceId, description]
     );
-    console.log(`✅ Logged POS activity: ${activityType}`);
+    console.log(`✅ Logged POS activity: ${activityType}, inserted ID:`, result[0]?.insertId);
   } catch (err) {
     console.error('❌ Failed to log POS activity:', err);
+    console.error('Activity details:', { userId, branchId, activityType, description, referenceId });
     // Don't throw - just log the error. The main operation should still succeed
   }
 }
@@ -250,26 +251,15 @@ export const getUserTransactions = async (req, res) => {
   try {
     const userId = req.user.user_id;
     const branchId = req.user.branch_id;
-    const roleId = req.user.role_id;
 
-    // Admins (role 2) and SuperAdmins (role 3) can see all transactions for their branch
-    // Cashiers (role 1) can only see their own transactions
-    let query = `
-      SELECT transaction_id, transaction_number, created_at, total_amount, amount_paid, status
-      FROM transactions
-      WHERE branch_id = ?
-    `;
-    const params = [branchId];
-
-    if (roleId === 1) {
-      // Cashier - only their own transactions
-      query += ` AND cashier_id = ?`;
-      params.push(userId);
-    }
-
-    query += ` ORDER BY created_at DESC`;
-
-    const [rows] = await db.query(query, params);
+    // All users (including admins) see only their own transactions
+    const [rows] = await db.query(
+      `SELECT transaction_id, transaction_number, created_at, total_amount, amount_paid, status
+       FROM transactions
+       WHERE cashier_id = ? AND branch_id = ?
+       ORDER BY created_at DESC`,
+      [userId, branchId]
+    );
 
     res.status(200).json(rows);
   } catch (error) {
