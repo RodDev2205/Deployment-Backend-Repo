@@ -11,28 +11,33 @@ export const getSalesByPeriod = async (req, res) => {
   switch (period) {
     case 'weekly':
       // produce string like "2023-05" for ISO year-week
-      groupExpr = `CONCAT(YEAR(created_at), '-', LPAD(WEEK(created_at,1),2,'0'))`;
+      groupExpr = `CONCAT(YEAR(t.created_at), '-', LPAD(WEEK(t.created_at,1),2,'0'))`;
       break;
     case 'monthly':
       // produce string like "2023-02" for year-month
-      groupExpr = `CONCAT(YEAR(created_at), '-', LPAD(MONTH(created_at),2,'0'))`;
+      groupExpr = `CONCAT(YEAR(t.created_at), '-', LPAD(MONTH(t.created_at),2,'0'))`;
       break;
     default:
-      groupExpr = `DATE(created_at)`;
+      groupExpr = `DATE(t.created_at)`;
       break;
   }
 
   try {
+    // aggregate using transaction_items so we can compute gross/net sales correctly
     let query = `
-      SELECT 
+      SELECT
         ${groupExpr} as period_key,
-        branch_id,
-        COUNT(CASE WHEN status = 'Completed' THEN 1 END) as transaction_count,
-        SUM(CASE WHEN status = 'Completed' THEN total_amount ELSE 0 END) as total_sales,
-        COUNT(CASE WHEN status = 'Voided' THEN 1 END) as voided_count,
-        COUNT(CASE WHEN status = 'Refunded' THEN 1 END) as refunded_count,
-        COUNT(CASE WHEN status = 'Partial Refunded' THEN 1 END) as partial_refunded_count
-      FROM transactions
+        t.branch_id,
+        COUNT(DISTINCT t.transaction_id) as transaction_count,
+        SUM((ti.quantity - ti.voided_quantity) * ti.price) as total_sales,
+        SUM((ti.quantity + ti.voided_quantity) * ti.price) as gross_sales,
+        SUM(ti.voided_quantity * ti.price) as voided_sales,
+        COUNT(CASE WHEN t.status = 'Voided' THEN 1 END) as voided_count,
+        COUNT(CASE WHEN t.status = 'Partial Voided' THEN 1 END) as partial_voided_count,
+        COUNT(CASE WHEN t.status = 'Refunded' THEN 1 END) as refunded_count,
+        COUNT(CASE WHEN t.status = 'Partial Refunded' THEN 1 END) as partial_refunded_count
+      FROM transactions t
+      LEFT JOIN transaction_items ti ON ti.transaction_id = t.transaction_id
     `;
 
     let params = [];
@@ -82,18 +87,18 @@ export const getDailySalesByBranch = async (req, res) => {
 
     // Filter by branch if admin (role 2), superadmin (role 3) sees all branches
     if (role_id === 2) {
-      query += ` WHERE branch_id = ?`;
+      query += ` WHERE t.branch_id = ?`;
       params.push(branch_id);
     }
 
     // Add date filtering if provided
     if (startDate && endDate) {
       const dateFilter = role_id === 2 ? ` AND ` : ` WHERE `;
-      query += `${dateFilter} DATE(created_at) BETWEEN ? AND ?`;
+      query += `${dateFilter} DATE(t.created_at) BETWEEN ? AND ?`;
       params.push(startDate, endDate);
     }
 
-    query += ` GROUP BY DATE(created_at), branch_id ORDER BY date DESC`;
+    query += ` GROUP BY ${groupExpr}, t.branch_id ORDER BY ${groupExpr} DESC`;
 
     const [results] = await db.query(query, params);
 
@@ -186,11 +191,11 @@ export const getPaymentMethodBreakdown = async (req, res) => {
     const branch_id = req.user.branch_id;
     const role_id = req.user.role_id;
 
-    // Start building base query
+    // Build query to count transactions by status
     let baseQuery = `
-      SELECT LOWER(payment_method) AS payment_method, COUNT(*) AS cnt
+      SELECT status, COUNT(*) AS cnt
       FROM transactions
-      WHERE status = 'Completed'
+      WHERE status IN ('Completed','Voided','Partial Voided')
     `;
     const params = [];
 
@@ -206,26 +211,20 @@ export const getPaymentMethodBreakdown = async (req, res) => {
       params.push(startDate, endDate);
     }
 
-    // Group by payment_method
-    baseQuery += ` GROUP BY LOWER(payment_method)`;
+    baseQuery += ` GROUP BY status`;
 
-    // Debug: log SQL and parameters
-    console.log("Payment method SQL:", baseQuery);
-    console.log("Params:", params);
-    // Execute query
     const [results] = await db.query(baseQuery, params);
-    console.log("Payment method query results:", results); // DEBUG
 
-    // Ensure both cash and gcash exist even if 0
-    const methods = ['cash', 'gcash'];
-    const normalized = methods.map(m => {
-      const row = results.find(r => r.payment_method === m);
-      return { payment_method: m, count: row ? Number(row.cnt) : 0 };
+    // Normalize to always supply all three statuses
+    const statuses = ['Completed','Voided','Partial Voided'];
+    const normalized = statuses.map(s => {
+      const row = results.find(r => r.status === s);
+      return { status: s, count: row ? Number(row.cnt) : 0 };
     });
 
     res.json(normalized);
   } catch (error) {
-    console.error("GET PAYMENT METHOD BREAKDOWN ERROR:", error);
+    console.error("GET STATUS BREAKDOWN ERROR:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
