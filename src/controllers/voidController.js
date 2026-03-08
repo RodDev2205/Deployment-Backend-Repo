@@ -44,8 +44,9 @@ export const voidTransaction = async (req, res) => {
     );
 
     // determine whether full or partial void
+    const isPartialVoid = void_items && Object.keys(void_items).length > 0;
     let itemsToVoid = [];
-    if (void_items && Object.keys(void_items).length > 0) {
+    if (isPartialVoid) {
       // partial: object mapping menu_id->qty
       itemsToVoid = allItems.map(it => ({
         ...it,
