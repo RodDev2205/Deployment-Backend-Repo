@@ -250,14 +250,26 @@ export const getUserTransactions = async (req, res) => {
   try {
     const userId = req.user.user_id;
     const branchId = req.user.branch_id;
+    const roleId = req.user.role_id;
 
-    const [rows] = await db.query(
-      `SELECT transaction_id, transaction_number, created_at, total_amount, amount_paid, status
-       FROM transactions
-       WHERE cashier_id = ? AND branch_id = ?
-       ORDER BY created_at DESC`,
-      [userId, branchId]
-    );
+    // Admins (role 2) and SuperAdmins (role 3) can see all transactions for their branch
+    // Cashiers (role 1) can only see their own transactions
+    let query = `
+      SELECT transaction_id, transaction_number, created_at, total_amount, amount_paid, status
+      FROM transactions
+      WHERE branch_id = ?
+    `;
+    const params = [branchId];
+
+    if (roleId === 1) {
+      // Cashier - only their own transactions
+      query += ` AND cashier_id = ?`;
+      params.push(userId);
+    }
+
+    query += ` ORDER BY created_at DESC`;
+
+    const [rows] = await db.query(query, params);
 
     res.status(200).json(rows);
   } catch (error) {
