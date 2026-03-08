@@ -1,5 +1,23 @@
 import { db } from "../config/db.js";
 
+// Helper function to log POS activities
+async function logPOSActivity({ userId, branchId, activityType, description, referenceId }) {
+  try {
+    console.log(`📝 Attempting to log POS activity: ${activityType} for user ${userId}`);
+    const result = await db.query(
+      `INSERT INTO activity_logs
+        (user_id, branch_id, activity_type, reference_id, description)
+       VALUES (?, ?, ?, ?, ?)`,
+      [userId, branchId, activityType, referenceId, description]
+    );
+    console.log(`✅ Logged POS activity: ${activityType}, inserted ID:`, result[0]?.insertId);
+  } catch (err) {
+    console.error('❌ Failed to log POS activity:', err);
+    console.error('Activity details:', { userId, branchId, activityType, description, referenceId });
+    // Don't throw - just log the error. The main operation should still succeed
+  }
+}
+
 // record a void request and update transaction status
 export const voidTransaction = async (req, res) => {
   const { transaction_id, reason, admin_pin, void_items } = req.body;
@@ -114,6 +132,22 @@ export const voidTransaction = async (req, res) => {
     console.log("Updated status to:", newStatus);
 
     await connection.commit();
+
+    // Get transaction number for logging
+    const [[transaction]] = await db.query(
+      `SELECT transaction_number FROM transactions WHERE transaction_id = ?`,
+      [transaction_id]
+    );
+
+    // Log the void transaction
+    await logPOSActivity({
+      userId: cashier_id,
+      branchId: branch_id,
+      activityType: isPartialVoid ? 'transaction_partial_void' : 'transaction_voided',
+      description: `${isPartialVoid ? 'Partially' : 'Fully'} voided transaction ${transaction.transaction_number} - Reason: ${reason}`,
+      referenceId: transaction_id
+    });
+
     res.json({ success: true, void_id: result.insertId, status: newStatus });
   } catch (error) {
     await connection.rollback();
