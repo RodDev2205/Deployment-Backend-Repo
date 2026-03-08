@@ -73,22 +73,22 @@ export const voidTransaction = async (req, res) => {
         );
       }
       
-      // For voided items: update quantity and mark as voided
+      // For voided items: update quantity and increment voided_quantity
       if (item.void_qty === item.quantity) {
-        // Full item void: set status to 'voided' and decrement quantity
+        // Full item void: increment voided_quantity by the voided amount
         await connection.query(
           `UPDATE transaction_items
-           SET quantity = GREATEST(0, quantity - ?), status = 'voided'
+           SET quantity = GREATEST(0, quantity - ?), voided_quantity = voided_quantity + ?
            WHERE transaction_id = ? AND menu_id = ?`,
-          [item.void_qty, transaction_id, item.menu_id]
+          [item.void_qty, item.void_qty, transaction_id, item.menu_id]
         );
       } else {
-        // Partial item void: decrement quantity and set status to 'voided'
+        // Partial item void: increment voided_quantity by the voided amount
         await connection.query(
           `UPDATE transaction_items
-           SET quantity = GREATEST(0, quantity - ?), status = 'voided'
+           SET quantity = GREATEST(0, quantity - ?), voided_quantity = voided_quantity + ?
            WHERE transaction_id = ? AND menu_id = ?`,
-          [item.void_qty, transaction_id, item.menu_id]
+          [item.void_qty, item.void_qty, transaction_id, item.menu_id]
         );
       }
     }

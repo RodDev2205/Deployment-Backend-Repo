@@ -191,13 +191,9 @@ export const completeSale = async (req, res) => {
     for (const item of transactionItemsData) {
       await connection.query(
         `INSERT INTO transaction_items 
-         (transaction_id, menu_id, quantity, price, total, status)
+         (transaction_id, menu_id, quantity, price, total, voided_quantity)
          VALUES (?, ?, ?, ?, ?, ?)`,
-        [transactionId, item.menu_id, item.quantity, item.price, item.total, 'sold']
-      );
-    }
-
-    await connection.commit();
+        [transactionId, item.menu_id, item.quantity, item.price, item.total, 0]
 
     // Emit dashboard updates
     io.to(`branch_${user.branch_id}`).emit('dashboardUpdate', { branch_id: user.branch_id });
