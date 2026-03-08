@@ -191,9 +191,9 @@ export const completeSale = async (req, res) => {
     for (const item of transactionItemsData) {
       await connection.query(
         `INSERT INTO transaction_items 
-         (transaction_id, menu_id, quantity, price, total)
-         VALUES (?, ?, ?, ?, ?)`,
-        [transactionId, item.menu_id, item.quantity, item.price, item.total]
+         (transaction_id, menu_id, quantity, price, total, status)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [transactionId, item.menu_id, item.quantity, item.price, item.total, 'sold']
       );
     }
 

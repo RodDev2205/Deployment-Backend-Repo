@@ -112,35 +112,46 @@ export const getSalesTodayByBranch = async (req, res) => {
   try {
     let query = `
       SELECT 
-        SUM(CASE WHEN status = 'Completed' THEN total_amount ELSE 0 END) as total_sales,
-        SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) as completed_count,
-        SUM(CASE WHEN status = 'Partial Refunded' THEN 1 ELSE 0 END) as partial_refunded_count,
-        SUM(CASE WHEN status = 'Refunded' THEN 1 ELSE 0 END) as refunded_count,
-        SUM(CASE WHEN status = 'Voided' THEN 1 ELSE 0 END) as voided_count,
-        SUM(CASE WHEN status = 'Partial Voided' THEN 1 ELSE 0 END) as partial_voided_count,
+        SUM(CASE WHEN t.status = 'Completed' THEN 1 ELSE 0 END) as completed_count,
+        SUM(CASE WHEN t.status = 'Partial Refunded' THEN 1 ELSE 0 END) as partial_refunded_count,
+        SUM(CASE WHEN t.status = 'Refunded' THEN 1 ELSE 0 END) as refunded_count,
+        SUM(CASE WHEN t.status = 'Voided' THEN 1 ELSE 0 END) as voided_count,
+        SUM(CASE WHEN t.status = 'Partial Voided' THEN 1 ELSE 0 END) as partial_voided_count,
         COUNT(*) as all_transaction_count,
-        MAX(CASE WHEN status = 'Completed' THEN total_amount ELSE NULL END) as max_order_value,
-        MIN(CASE WHEN status = 'Completed' THEN total_amount ELSE NULL END) as min_order_value,
-        AVG(CASE WHEN status = 'Completed' THEN total_amount ELSE NULL END) as avg_order_value,
-        SUM(total_amount) as gross_sales,
-        SUM(CASE WHEN status = 'Voided' THEN total_amount ELSE 0 END) as voided_sales,
-        COUNT(DISTINCT CASE WHEN status IN ('Voided', 'Partial Voided') THEN cashier_id ELSE NULL END) as staff_who_voided_count
-      FROM transactions
-      WHERE DATE(created_at) = CURDATE()
+        MAX(CASE WHEN t.status = 'Completed' THEN t.total_amount ELSE NULL END) as max_order_value,
+        MIN(CASE WHEN t.status = 'Completed' THEN t.total_amount ELSE NULL END) as min_order_value,
+        AVG(CASE WHEN t.status = 'Completed' THEN t.total_amount ELSE NULL END) as avg_order_value,
+        COUNT(DISTINCT CASE WHEN t.status IN ('Voided', 'Partial Voided') THEN t.cashier_id ELSE NULL END) as staff_who_voided_count
+      FROM transactions t
+      WHERE DATE(t.created_at) = CURDATE()
+    `;
+
+    // Calculate gross_sales and voided_sales from transaction_items
+    let itemsQuery = `
+      SELECT 
+        SUM(CASE WHEN ti.status = 'sold' THEN ti.total ELSE 0 END) as gross_sales,
+        SUM(CASE WHEN ti.status = 'void' THEN ti.total ELSE 0 END) as voided_sales
+      FROM transaction_items ti
+      INNER JOIN transactions t ON ti.transaction_id = t.transaction_id
+      WHERE DATE(t.created_at) = CURDATE()
     `;
 
     let params = [];
+    let itemsParams = [];
 
     // Filter by branch if admin
     if (role_id === 2) {
-      query += ` AND branch_id = ?`;
+      query += ` AND t.branch_id = ?`;
       params.push(branch_id);
+      itemsQuery += ` AND t.branch_id = ?`;
+      itemsParams.push(branch_id);
     }
 
     const [[result]] = await db.query(query, params);
+    const [[itemsResult]] = await db.query(itemsQuery, itemsParams);
 
-    const gross_sales = Number(result?.gross_sales || 0);
-    const voided_sales = Number(result?.voided_sales || 0);
+    const gross_sales = Number(itemsResult?.gross_sales || 0);
+    const voided_sales = Number(itemsResult?.voided_sales || 0);
     const net_sales = gross_sales - voided_sales;
 
     res.json({

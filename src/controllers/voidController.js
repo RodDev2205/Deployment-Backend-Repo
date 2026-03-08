@@ -59,7 +59,7 @@ export const voidTransaction = async (req, res) => {
     console.log("allItems:", allItems);
     console.log("itemsToVoid:", itemsToVoid);
 
-    // restore inventory and decrement transaction_items quantities
+    // restore inventory and update transaction_items: mark voided items as void, decrement quantities
     for (const item of itemsToVoid) {
       const [ingredients] = await connection.query(
         `SELECT inventory_id, servings_required FROM menu_inventory WHERE product_id = ?`,
@@ -72,13 +72,25 @@ export const voidTransaction = async (req, res) => {
           [restoreAmount, ing.inventory_id]
         );
       }
-      // subtract voided quantity from transaction_items
-      await connection.query(
-        `UPDATE transaction_items
-         SET quantity = GREATEST(0, quantity - ?)
-         WHERE transaction_id = ? AND menu_id = ?`,
-        [item.void_qty, transaction_id, item.menu_id]
-      );
+      
+      // For voided items: update quantity and mark as void
+      if (item.void_qty === item.quantity) {
+        // Full item void: set status to 'void' and decrement quantity
+        await connection.query(
+          `UPDATE transaction_items
+           SET quantity = GREATEST(0, quantity - ?), status = 'void'
+           WHERE transaction_id = ? AND menu_id = ?`,
+          [item.void_qty, transaction_id, item.menu_id]
+        );
+      } else {
+        // Partial item void: decrement quantity and set status to 'void'
+        await connection.query(
+          `UPDATE transaction_items
+           SET quantity = GREATEST(0, quantity - ?), status = 'void'
+           WHERE transaction_id = ? AND menu_id = ?`,
+          [item.void_qty, transaction_id, item.menu_id]
+        );
+      }
     }
 
     // update transaction status appropriately
