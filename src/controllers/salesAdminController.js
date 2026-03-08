@@ -207,17 +207,6 @@ export const getPaymentMethodBreakdown = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-    const normalized = methods.map(m => {
-      const row = results.find(r => r.payment_method === m);
-      return { payment_method: m, count: row ? Number(row.cnt) : 0 };
-    });
-
-    res.json(normalized);
-  } catch (error) {
-    console.error("GET PAYMENT METHOD BREAKDOWN ERROR:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
-  }
-};
 
 // Get top selling products for a branch (or all branches if superadmin)
 export const getTopProductsByBranch = async (req, res) => {
