@@ -27,7 +27,9 @@ export const getSalesByPeriod = async (req, res) => {
         ${groupExpr} as period_key,
         t.branch_id,
         COUNT(CASE WHEN t.status = 'Completed' THEN 1 END) as transaction_count,
-        SUM((ti.quantity - ti.voided_quantity) * ti.price) as total_sales,
+        SUM(CASE WHEN t.status = 'Completed' 
+                 THEN COALESCE((ti.quantity - ti.voided_quantity) * ti.price,0) 
+                 ELSE 0 END) as total_sales,
         COUNT(CASE WHEN t.status = 'Voided' THEN 1 END) as voided_count,
         COUNT(CASE WHEN t.status = 'Refunded' THEN 1 END) as refunded_count,
         COUNT(CASE WHEN t.status = 'Partial Refunded' THEN 1 END) as partial_refunded_count
@@ -185,11 +187,12 @@ export const getPaymentMethodBreakdown = async (req, res) => {
     const branch_id = req.user.branch_id;
     const role_id = req.user.role_id;
 
-    // Build query
+    // Build query (only include relevant statuses)
     let query = `
       SELECT status, COUNT(*) AS cnt
       FROM transactions
       WHERE DATE(created_at) BETWEEN ? AND ?
+        AND status IN ('Completed','Voided','Partial Voided')
     `;
     const params = [startDate, endDate];
 
