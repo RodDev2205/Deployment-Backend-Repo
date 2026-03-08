@@ -130,7 +130,7 @@ export const getSalesTodayByBranch = async (req, res) => {
     let itemsQuery = `
       SELECT 
         SUM(CASE WHEN ti.status = 'sold' THEN ti.total ELSE 0 END) as gross_sales,
-        SUM(CASE WHEN ti.status = 'void' THEN ti.total ELSE 0 END) as voided_sales
+        SUM(CASE WHEN ti.status = 'voided' THEN ti.total ELSE 0 END) as voided_sales
       FROM transaction_items ti
       INNER JOIN transactions t ON ti.transaction_id = t.transaction_id
       WHERE DATE(t.created_at) = CURDATE()
