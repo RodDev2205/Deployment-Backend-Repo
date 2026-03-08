@@ -26,10 +26,8 @@ export const getSalesByPeriod = async (req, res) => {
       SELECT
         ${groupExpr} as period_key,
         t.branch_id,
-        COUNT(DISTINCT CASE WHEN t.status = 'Completed' THEN t.transaction_id END) as transaction_count,
-        COALESCE(SUM(CASE WHEN t.status = 'Completed' 
-                 THEN (ti.quantity - ti.voided_quantity) * ti.price
-                 ELSE 0 END), 0) as total_sales,
+        COUNT(DISTINCT t.transaction_id) as transaction_count,
+        COALESCE(SUM((ti.quantity - ti.voided_quantity) * ti.price), 0) as total_sales,
         COUNT(DISTINCT CASE WHEN t.status = 'Voided' THEN t.transaction_id END) as voided_count,
         COUNT(DISTINCT CASE WHEN t.status = 'Refunded' THEN t.transaction_id END) as refunded_count,
         COUNT(DISTINCT CASE WHEN t.status = 'Partial Refunded' THEN t.transaction_id END) as partial_refunded_count
