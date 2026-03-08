@@ -194,3 +194,44 @@ export async function getBranchSalesSummary(req, res) {
     return res.status(500).json({ message: 'Failed to fetch branch sales summary', error: err.message });
   }
 }
+
+export async function getTopMenuSalesByBranch(req, res) {
+  try {
+    const role_id = req.user.role_id;
+    const userBranchId = req.user.branch_id;
+
+    let query = `
+      SELECT 
+             m.menu_id,
+             m.menu_name,
+             b.branch_id,
+             b.branch_name,
+             IFNULL(SUM(CASE WHEN t.status='Completed' THEN ti.quantity * ti.price ELSE 0 END), 0) AS total_sales
+      FROM transactions t
+      LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id
+      LEFT JOIN menus m ON ti.menu_id = m.menu_id
+      LEFT JOIN branches b ON t.branch_id = b.branch_id
+    `;
+    const params = [];
+
+    // if admin (role_id 2), restrict to their branch
+    if (role_id !== 3) {
+      query += ` WHERE t.branch_id = ?`;
+      params.push(userBranchId);
+    }
+
+    query += `
+      GROUP BY m.menu_id, m.menu_name, b.branch_id, b.branch_name
+      HAVING total_sales > 0
+      ORDER BY total_sales DESC
+      LIMIT 50
+    `;
+
+    const [rows] = await db.execute(query, params);
+
+    return res.json(rows);
+  } catch (err) {
+    console.error('getTopMenuSalesByBranch error', err);
+    return res.status(500).json({ message: 'Failed to fetch top menu sales', error: err.message });
+  }
+}
