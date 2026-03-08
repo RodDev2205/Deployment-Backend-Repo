@@ -4,28 +4,40 @@ import bcrypt from "bcrypt";
 // Helper function to log admin activities
 async function logAdminActivity({ userId, branchId, activityType, description, referenceId }) {
   try {
+    console.log(`📝 Attempting to log admin activity: ${activityType}`);
     await db.query(
       `INSERT INTO activity_logs
         (user_id, branch_id, activity_type, reference_id, description)
        VALUES (?, ?, ?, ?, ?)`,
       [userId, branchId, activityType, referenceId, description]
     );
+    console.log(`✅ Logged admin activity: ${activityType}`);
   } catch (err) {
-    console.error('Failed to log admin activity:', err);
-    // Don't throw error to avoid breaking the main operation
+    console.error('❌ Failed to log admin activity:', err);
+    // Don't throw - just log the error. The main operation should still succeed
   }
 }
 
 export const createCashier = async (req, res) => {
   try {
+    console.log("🔍 createCashier called");
+    console.log("req.user:", req.user);
+    
+    if (!req.user || !req.user.user_id) {
+      console.error("❌ Missing or invalid user authentication");
+      return res.status(401).json({ error: "Unauthorized - invalid token" });
+    }
+
     const adminId = req.user.user_id; // from JWT
     const branchId = req.user.branch_id; // from JWT
     const { first_name, last_name, username, password, contact_number } = req.body;
 
+    console.log("📋 Input validation...");
     if (!first_name || !last_name || !username || !password) {
       return res.status(400).json({ error: "All fields are required" });
     }
 
+    console.log("🔍 Checking if username exists...");
     const [existing] = await db.query(
       "SELECT user_id FROM users WHERE username = ?",
       [username]
@@ -35,13 +47,17 @@ export const createCashier = async (req, res) => {
       return res.status(400).json({ error: "Username already taken" });
     }
 
+    console.log("🔐 Hashing password...");
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    console.log("💾 Inserting cashier into database...");
     const [result] = await db.query(
       `INSERT INTO users (first_name, last_name, username, password, role_id, status, branch_id, contact_number, created_by)
        VALUES (?, ?, ?, ?, 1, 'Activate', ?, ?, ?)`,
       [first_name, last_name, username, hashedPassword, branchId, contact_number || null, adminId]
     );
+
+    console.log("✅ Cashier inserted, ID:", result.insertId);
 
     // Log the activity
     await logAdminActivity({
@@ -52,9 +68,11 @@ export const createCashier = async (req, res) => {
       referenceId: result.insertId
     });
 
+    console.log("✅ Cashier created successfully");
     res.json({ message: "Cashier created successfully" });
 
   } catch (err) {
+    console.error("❌ Error in createCashier:", err);
     res.status(500).json({ error: "Error creating cashier", details: err.message });
   }
 };
