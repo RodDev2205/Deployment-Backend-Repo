@@ -39,8 +39,8 @@ export async function getKpis(req, res) {
 
     // Build WHERE clause for completed/amount queries (KPIs use only completed orders)
     const whereClause = branchId && branchId !== 'all'
-      ? `status = 'Completed' AND created_at BETWEEN ? AND ? AND branch_id = ?`
-      : `status = 'Completed' AND created_at BETWEEN ? AND ?`;
+      ? `t.status = 'Completed' AND t.created_at BETWEEN ? AND ? AND t.branch_id = ?`
+      : `t.status = 'Completed' AND t.created_at BETWEEN ? AND ?`;
     const params = branchId && branchId !== 'all'
       ? [startSql, endSql, parseInt(branchId)]
       : [startSql, endSql];
@@ -55,7 +55,10 @@ export async function getKpis(req, res) {
 
     // 1) Total sales (filtered by branch if selected)
     const [totalRows] = await db.execute(
-      `SELECT IFNULL(SUM(total_amount), 0) AS total_sales FROM transactions WHERE ${whereClause}`,
+      `SELECT COALESCE(SUM((ti.quantity - ti.voided_quantity) * ti.price), 0) AS total_sales 
+       FROM transactions t 
+       LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id 
+       WHERE ${whereClause.replace('status = \'Completed\' AND created_at BETWEEN ? AND ?', 't.status = \'Completed\' AND t.created_at BETWEEN ? AND ?')}`,
       params
     );
 
@@ -80,7 +83,14 @@ export async function getKpis(req, res) {
 
     // 4) Average order value (filtered by branch if selected)
     const [avgRows] = await db.execute(
-      `SELECT IFNULL(AVG(total_amount), 0) AS avg_order_value FROM transactions WHERE ${whereClause}`,
+      `SELECT AVG(net_total) AS avg_order_value 
+       FROM (
+         SELECT t.transaction_id, COALESCE(SUM((ti.quantity - ti.voided_quantity) * ti.price), 0) as net_total 
+         FROM transactions t 
+         LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id 
+         WHERE ${whereClause.replace('status = \'Completed\' AND created_at BETWEEN ? AND ?', 't.status = \'Completed\' AND t.created_at BETWEEN ? AND ?')} 
+         GROUP BY t.transaction_id
+       ) as sub`,
       params
     );
 
