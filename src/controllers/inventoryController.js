@@ -11,16 +11,27 @@ export const addIngredient = async (req, res) => {
 
     const total_servings = quantity * servings_per_unit;
 
-    // Determine status based on quantity and threshold, ensuring valid enum values
+    const query = `
+      INSERT INTO inventory 
+      (item_name, quantity, servings_per_unit, total_servings, low_stock_threshold, status, branch_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `;
+    // Determine status based on quantity and threshold
+    // translate front-end status values to enum ('active' -> 'available', 'inactive' -> 'unavailable')
     let effectiveStatus;
     if (Number(quantity) === 0) {
       effectiveStatus = 'out_of_stock';
     } else if (Number(quantity) <= Number(low_stock_threshold)) {
       effectiveStatus = 'low_stock';
     } else {
-      // Only use provided status if it's a valid enum value, otherwise default to 'available'
-      const validStatuses = ['available', 'unavailable', 'low_stock', 'out_of_stock'];
-      effectiveStatus = validStatuses.includes(status) ? status : 'available';
+      // convert provided status or default to 'available'
+      if (status === 'active') {
+        effectiveStatus = 'available';
+      } else if (status === 'inactive') {
+        effectiveStatus = 'unavailable';
+      } else {
+        effectiveStatus = 'available';
+      }
     }
 
     const values = [
@@ -226,16 +237,21 @@ export const editIngredientById = async (req, res) => {
       SET item_name = ?, quantity = ?, servings_per_unit = ?, total_servings = ?, low_stock_threshold = ?, status = ?
       WHERE inventory_id = ? AND branch_id = ?
     `;
-    // Recompute status so threshold rules are always enforced, ensuring valid enum values
+    // Recompute status so threshold rules are always enforced
+    // convert provided status to enum values
     let effectiveStatus;
     if (Number(quantity) === 0) {
       effectiveStatus = 'out_of_stock';
     } else if (Number(quantity) <= Number(low_stock_threshold)) {
       effectiveStatus = 'low_stock';
     } else {
-      // Only use provided status if it's a valid enum value, otherwise default to 'available'
-      const validStatuses = ['available', 'unavailable', 'low_stock', 'out_of_stock'];
-      effectiveStatus = validStatuses.includes(status) ? status : 'available';
+      if (status === 'active') {
+        effectiveStatus = 'available';
+      } else if (status === 'inactive') {
+        effectiveStatus = 'unavailable';
+      } else {
+        effectiveStatus = status || 'available';
+      }
     }
 
     const values = [
