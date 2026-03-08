@@ -127,12 +127,12 @@ export const getSalesTodayByBranch = async (req, res) => {
     `;
 
     // Calculate gross_sales and voided_sales from transaction_items
-    // Gross Sales: Total value of all items ordered (unchanged by voids)
+    // Gross Sales: Total value of all items originally ordered (quantity + voided_quantity)
     // Voided Sales: Value of voided portions
     // Net Sales: Gross Sales - Voided Sales
     let itemsQuery = `
       SELECT
-        SUM(ti.quantity * ti.price) as gross_sales,
+        SUM((ti.quantity + ti.voided_quantity) * ti.price) as gross_sales,
         SUM(ti.voided_quantity * ti.price) as voided_sales
       FROM transaction_items ti
       INNER JOIN transactions t ON ti.transaction_id = t.transaction_id
@@ -158,8 +158,8 @@ export const getSalesTodayByBranch = async (req, res) => {
     const net_sales = gross_sales - voided_sales;
 
     res.json({
-      total_sales: net_sales, // Net sales after voids
-      gross_sales: gross_sales, // Total value of all items ordered (never changes)
+      total_sales: net_sales, // Net sales after voids (current remaining value)
+      gross_sales: gross_sales, // Total value of all items originally ordered
       voided_sales: voided_sales, // Value of voided portions
       transaction_count: result?.all_transaction_count || 0,
       completed_count: result?.completed_count || 0,

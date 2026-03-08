@@ -73,25 +73,37 @@ export const voidTransaction = async (req, res) => {
         );
       }
       
-      // For voided items: increment voided_quantity (don't change original quantity)
+      // For voided items: deduct quantity AND increment voided_quantity for tracking
       await connection.query(
         `UPDATE transaction_items
-         SET voided_quantity = voided_quantity + ?
+         SET quantity = GREATEST(0, quantity - ?), voided_quantity = voided_quantity + ?
          WHERE transaction_id = ? AND menu_id = ?`,
-        [item.void_qty, transaction_id, item.menu_id]
+        [item.void_qty, item.void_qty, transaction_id, item.menu_id]
       );
     }
 
-    // Check if transaction is fully voided (all items have voided_quantity >= quantity)
-    const [itemsCheck] = await connection.query(
-      `SELECT COUNT(*) as total_items, 
-              SUM(CASE WHEN voided_quantity >= quantity THEN 1 ELSE 0 END) as fully_voided_items
+    // Update transaction total_amount to reflect voided items
+    const [currentTotal] = await connection.query(
+      `SELECT SUM((quantity + voided_quantity) * price) as original_total,
+              SUM(quantity * price) as current_total
        FROM transaction_items WHERE transaction_id = ?`,
       [transaction_id]
     );
     
-    const isFullyVoided = itemsCheck[0].total_items === itemsCheck[0].fully_voided_items;
-    const newStatus = isFullyVoided ? 'Voided' : 'Partial Voided';
+    const voidedAmount = (currentTotal[0].original_total || 0) - (currentTotal[0].current_total || 0);
+    
+    // Update transaction total_amount
+    await connection.query(
+      `UPDATE transactions SET total_amount = total_amount - ? WHERE transaction_id = ?`,
+      [voidedAmount, transaction_id]
+    );
+
+    // Check if transaction is fully voided (all items have quantity = 0)
+    const [[{totalRemaining}]] = await connection.query(
+      `SELECT COALESCE(SUM(quantity), 0) as totalRemaining FROM transaction_items WHERE transaction_id = ?`,
+      [transaction_id]
+    );
+    const newStatus = totalRemaining === 0 ? 'Voided' : 'Partial Voided';
 
     await connection.query(
       `UPDATE transactions SET status = ? WHERE transaction_id = ?`,
