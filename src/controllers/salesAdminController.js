@@ -117,10 +117,14 @@ export const getSalesTodayByBranch = async (req, res) => {
         SUM(CASE WHEN status = 'Partial Refunded' THEN 1 ELSE 0 END) as partial_refunded_count,
         SUM(CASE WHEN status = 'Refunded' THEN 1 ELSE 0 END) as refunded_count,
         SUM(CASE WHEN status = 'Voided' THEN 1 ELSE 0 END) as voided_count,
+        SUM(CASE WHEN status = 'Partial Voided' THEN 1 ELSE 0 END) as partial_voided_count,
         COUNT(*) as all_transaction_count,
         MAX(CASE WHEN status = 'Completed' THEN total_amount ELSE NULL END) as max_order_value,
         MIN(CASE WHEN status = 'Completed' THEN total_amount ELSE NULL END) as min_order_value,
-        AVG(CASE WHEN status = 'Completed' THEN total_amount ELSE NULL END) as avg_order_value
+        AVG(CASE WHEN status = 'Completed' THEN total_amount ELSE NULL END) as avg_order_value,
+        SUM(total_amount) as gross_sales,
+        SUM(CASE WHEN status = 'Voided' THEN total_amount ELSE 0 END) as voided_sales,
+        COUNT(DISTINCT CASE WHEN status IN ('Voided', 'Partial Voided') THEN cashier_id ELSE NULL END) as staff_who_voided_count
       FROM transactions
       WHERE DATE(created_at) = CURDATE()
     `;
@@ -135,13 +139,21 @@ export const getSalesTodayByBranch = async (req, res) => {
 
     const [[result]] = await db.query(query, params);
 
+    const gross_sales = Number(result?.gross_sales || 0);
+    const voided_sales = Number(result?.voided_sales || 0);
+    const net_sales = gross_sales - voided_sales;
+
     res.json({
-      total_sales: Number(result?.total_sales || 0),
+      total_sales: net_sales,
+      gross_sales: gross_sales,
+      voided_sales: voided_sales,
       transaction_count: result?.all_transaction_count || 0,
       completed_count: result?.completed_count || 0,
       partial_refunded_count: result?.partial_refunded_count || 0,
       refunded_count: result?.refunded_count || 0,
       voided_count: result?.voided_count || 0,
+      partial_voided_count: result?.partial_voided_count || 0,
+      staff_who_voided_count: result?.staff_who_voided_count || 0,
       max_order_value: Number(result?.max_order_value || 0),
       min_order_value: Number(result?.min_order_value || 0),
       avg_order_value: Number(result?.avg_order_value || 0),
