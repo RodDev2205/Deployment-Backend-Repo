@@ -79,14 +79,12 @@ export const voidTransaction = async (req, res) => {
     }
 
     // update transaction status appropriately
-    let newStatus;
-    if (!void_items || Object.keys(void_items).length === 0) {
-      newStatus = 'Voided';
-    } else {
-      // check if all items fully voided
-      const remaining = itemsToVoid.reduce((sum, it) => sum + (it.quantity - it.void_qty), 0);
-      newStatus = remaining === 0 ? 'Voided' : 'Partial Voided';
-    }
+    // Check total remaining quantity after void
+    const [[{totalRemaining}]] = await connection.query(
+      `SELECT COALESCE(SUM(quantity), 0) as totalRemaining FROM transaction_items WHERE transaction_id = ?`,
+      [transaction_id]
+    );
+    const newStatus = totalRemaining === 0 ? 'Voided' : 'Partial Voided';
 
     await connection.query(
       `UPDATE transactions SET status = ? WHERE transaction_id = ?`,
