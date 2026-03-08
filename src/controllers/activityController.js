@@ -39,7 +39,7 @@ export const getLoginLogs = async (req, res) => {
       params.push(branch_id);
     }
 
-    query += ` ORDER BY ll.timestamp DESC LIMIT 500`;
+    query += ` ORDER BY timestamp DESC LIMIT 500`;
 
     const [rows] = await db.query(query, params);
     res.json(rows);
