@@ -50,8 +50,7 @@ export const createCashier = async (req, res) => {
     console.log("🔐 Hashing password...");
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    console.log("💾 Inserting cashier into database...");
-    const [result] = await db.query(
+    await db.query(
       `INSERT INTO users (first_name, last_name, username, password, role_id, status, branch_id, contact_number, created_by)
        VALUES (?, ?, ?, ?, 1, 'Activate', ?, ?, ?)`,
       [first_name, last_name, username, hashedPassword, branchId, contact_number || null, adminId]
@@ -172,10 +171,13 @@ export const updateCashier = async (req, res) => {
       return res.status(400).json({ error: "Username already taken" });
     }
 
+    // Combine first_name and last_name into full_name for database compatibility
+    const fullName = `${first_name} ${last_name}`.trim();
+
     // Update user (ensure cashier belongs to this branch)
     const [result] = await db.query(
-      "UPDATE users SET first_name = ?, last_name = ?, username = ?, contact_number = ? WHERE user_id = ? AND role_id = 1 AND branch_id = ?",
-      [first_name, last_name, username, contact_number || null, id, branchId]
+      "UPDATE users SET full_name = ?, first_name = ?, last_name = ?, username = ?, contact_number = ? WHERE user_id = ? AND role_id = 1 AND branch_id = ?",
+      [fullName, first_name, last_name, username, contact_number || null, id, branchId]
     );
 
     if (result.affectedRows === 0) {
