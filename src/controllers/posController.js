@@ -1,6 +1,23 @@
 import { db } from "../config/db.js";
 import { io } from "../../server.js"; // used to notify realtime updates
 
+// Helper function to log POS activities
+async function logPOSActivity({ userId, branchId, activityType, description, referenceId }) {
+  try {
+    console.log(`📝 Attempting to log POS activity: ${activityType}`);
+    await db.query(
+      `INSERT INTO activity_logs
+        (user_id, branch_id, activity_type, reference_id, description)
+       VALUES (?, ?, ?, ?, ?)`,
+      [userId, branchId, activityType, referenceId, description]
+    );
+    console.log(`✅ Logged POS activity: ${activityType}`);
+  } catch (err) {
+    console.error('❌ Failed to log POS activity:', err);
+    // Don't throw - just log the error. The main operation should still succeed
+  }
+}
+
 // Helper function to generate unique transaction number
 const generateTransactionNumber = () => {
   const timestamp = Date.now().toString().slice(-8);
@@ -198,6 +215,16 @@ export const completeSale = async (req, res) => {
     }
 
     await connection.commit();
+
+    // Log the completed transaction
+    await logPOSActivity({
+      userId: user.user_id,
+      branchId: user.branch_id,
+      activityType: 'transaction_completed',
+      description: `Completed transaction ${transactionNumber} - Total: ₱${totalAmount.toFixed(2)}, Paid: ₱${amountPaid.toFixed(2)}`,
+      referenceId: transactionId
+    });
+
     io.to(`branch_${user.branch_id}`).emit('dashboardUpdate', { branch_id: user.branch_id });
     io.emit('dashboardUpdate', { branch_id: user.branch_id });
 
@@ -438,6 +465,15 @@ export const voidTransaction = async (req, res) => {
     }
 
     await connection.commit();
+
+    // Log the void transaction
+    await logPOSActivity({
+      userId: user.user_id,
+      branchId: user.branch_id,
+      activityType: voidType === 'full' ? 'transaction_voided' : 'transaction_partial_void',
+      description: `${voidType === 'full' ? 'Fully' : 'Partially'} voided transaction ${transaction.transaction_number} - Reason: ${reason}`,
+      referenceId: transaction_id
+    });
 
     // Emit dashboard updates
     io.to(`branch_${user.branch_id}`).emit('dashboardUpdate', { branch_id: user.branch_id });
