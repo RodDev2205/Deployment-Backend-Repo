@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
+import { db } from "./config/db.js";
 
 import adminRoutes from "./routes/adminRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
@@ -34,6 +35,33 @@ app.use(express.json());
 // serve uploaded files from configurable directory (Railway volume mounted at /app/uploads)
 const uploadDir = process.env.UPLOAD_DIR || path.join(path.resolve(), "uploads");
 app.use("/uploads", express.static(uploadDir));
+
+// Create activity_logs table if it doesn't exist
+(async () => {
+  try {
+    console.log("🔄 Creating activity_logs table if needed...");
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS activity_logs (
+        log_id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        branch_id INT NOT NULL,
+        activity_type VARCHAR(50) NOT NULL,
+        description TEXT NOT NULL,
+        reference_id INT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_user_id (user_id),
+        INDEX idx_branch_id (branch_id),
+        INDEX idx_activity_type (activity_type),
+        INDEX idx_created_at (created_at),
+        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+        FOREIGN KEY (branch_id) REFERENCES branches(branch_id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+    `);
+    console.log("✅ activity_logs table ready");
+  } catch (error) {
+    console.error("❌ Failed to create activity_logs table:", error);
+  }
+})();
 
 // Register routes
 app.use("/api/admin", adminRoutes);

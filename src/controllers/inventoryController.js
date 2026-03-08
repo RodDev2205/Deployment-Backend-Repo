@@ -6,9 +6,9 @@ async function logInventoryActivity({ userId, branchId, activityType, descriptio
   try {
     await db.query(
       `INSERT INTO activity_logs
-        (user_id, branch_id, activity_type, description, reference_id)
+        (user_id, branch_id, activity_type, reference_id, description)
        VALUES (?, ?, ?, ?, ?)`,
-      [userId, branchId, activityType, description, referenceId]
+      [userId, branchId, activityType, referenceId, description]
     );
   } catch (err) {
     console.error('Failed to log inventory activity:', err);
