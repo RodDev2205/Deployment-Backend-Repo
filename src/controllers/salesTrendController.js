@@ -6,6 +6,8 @@ import { db } from "../config/db.js";
 //   startDate, endDate - optional YYYY-MM-DD boundaries (default month-to-date)
 //   branchId - optional branch filter (use 'all' or omit for no filter)
 export async function getSalesTrend(req, res) {
+  // ensure clients always fetch up-to-date trend data
+  res.setHeader('Cache-Control', 'no-store');
   try {
     const { period = 'daily', startDate, endDate } = req.query;
     let { branchId } = req.query; // may be overwritten for admins
@@ -73,7 +75,7 @@ export async function getSalesTrend(req, res) {
     const sql = `
       SELECT
         ${groupExpr} AS period_key,
-        COALESCE(SUM((ti.quantity - ti.voided_quantity) * ti.price), 0) AS total_sales,
+        COALESCE(SUM(ti.quantity * ti.price), 0) AS total_sales,
         COUNT(DISTINCT t.transaction_id) AS transaction_count
       FROM transactions t
       LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id

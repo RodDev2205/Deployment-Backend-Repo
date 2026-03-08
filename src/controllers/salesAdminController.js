@@ -2,6 +2,8 @@ import { db } from "../config/db.js";
 
 // Get sales by period (daily, weekly, monthly) for the current branch or all branches (if superadmin)
 export const getSalesByPeriod = async (req, res) => {
+  // disable HTTP caching, clients should always retrieve fresh data
+  res.setHeader('Cache-Control', 'no-store');
   const { period = 'daily', startDate, endDate } = req.query;
   const branch_id = req.user.branch_id;
   const role_id = req.user.role_id;
@@ -27,7 +29,7 @@ export const getSalesByPeriod = async (req, res) => {
         ${groupExpr} as period_key,
         t.branch_id,
         COUNT(DISTINCT t.transaction_id) as transaction_count,
-        COALESCE(SUM((ti.quantity - ti.voided_quantity) * ti.price), 0) as total_sales,
+        COALESCE(SUM(ti.quantity * ti.price), 0) as total_sales,
         COUNT(DISTINCT CASE WHEN t.status = 'Voided' THEN t.transaction_id END) as voided_count,
         COUNT(DISTINCT CASE WHEN t.status = 'Refunded' THEN t.transaction_id END) as refunded_count,
         COUNT(DISTINCT CASE WHEN t.status = 'Partial Refunded' THEN t.transaction_id END) as partial_refunded_count
@@ -60,6 +62,7 @@ export const getSalesByPeriod = async (req, res) => {
 
 // Get daily sales for the current branch or all branches (if superadmin)
 export const getDailySalesByBranch = async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   const { startDate, endDate } = req.query;
   const branch_id = req.user.branch_id;
   const role_id = req.user.role_id;
@@ -106,6 +109,7 @@ export const getDailySalesByBranch = async (req, res) => {
 
 // Get sales summary for today by branch
 export const getSalesTodayByBranch = async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   const branch_id = req.user.branch_id;
   const role_id = req.user.role_id;
 

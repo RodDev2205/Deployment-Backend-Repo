@@ -16,6 +16,8 @@ import { db } from "../config/db.js";
 */
 
 export async function getKpis(req, res) {
+  // prevent HTTP caching of KPI responses
+  res.setHeader('Cache-Control', 'no-store');
   try {
     const { startDate, endDate, branchId } = req.query;
 
@@ -55,7 +57,7 @@ export async function getKpis(req, res) {
 
     // 1) Total sales (filtered by branch if selected)
     const [totalRows] = await db.execute(
-      `SELECT COALESCE(SUM((ti.quantity - ti.voided_quantity) * ti.price), 0) AS total_sales 
+      `SELECT COALESCE(SUM(ti.quantity * ti.price), 0) AS total_sales 
        FROM transactions t 
        LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id 
        WHERE ${whereClause.replace('status = \'Completed\' AND created_at BETWEEN ? AND ?', 't.status = \'Completed\' AND t.created_at BETWEEN ? AND ?')}`,
@@ -85,7 +87,7 @@ export async function getKpis(req, res) {
     const [avgRows] = await db.execute(
       `SELECT AVG(net_total) AS avg_order_value 
        FROM (
-         SELECT t.transaction_id, COALESCE(SUM((ti.quantity - ti.voided_quantity) * ti.price), 0) as net_total 
+         SELECT t.transaction_id, COALESCE(SUM(ti.quantity * ti.price), 0) as net_total 
          FROM transactions t 
          LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id 
          WHERE ${whereClause.replace('status = \'Completed\' AND created_at BETWEEN ? AND ?', 't.status = \'Completed\' AND t.created_at BETWEEN ? AND ?')} 
