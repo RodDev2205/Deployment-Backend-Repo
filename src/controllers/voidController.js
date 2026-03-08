@@ -103,7 +103,7 @@ export const voidTransaction = async (req, res) => {
       `SELECT COALESCE(SUM(quantity), 0) as totalRemaining FROM transaction_items WHERE transaction_id = ?`,
       [transaction_id]
     );
-    const newStatus = totalRemaining === 0 ? 'Voided' : 'Partial Voided';
+    const newStatus = isPartialVoid ? (totalRemaining === 0 ? 'Voided' : 'Partial Voided') : 'Voided';
 
     await connection.query(
       `UPDATE transactions SET status = ? WHERE transaction_id = ?`,
