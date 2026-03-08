@@ -50,7 +50,8 @@ export const createCashier = async (req, res) => {
     console.log("🔐 Hashing password...");
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    await db.query(
+    console.log("💾 Inserting cashier into database...");
+    const [result] = await db.query(
       `INSERT INTO users (first_name, last_name, username, password, role_id, status, branch_id, contact_number, created_by)
        VALUES (?, ?, ?, ?, 1, 'Activate', ?, ?, ?)`,
       [first_name, last_name, username, hashedPassword, branchId, contact_number || null, adminId]
