@@ -1,6 +1,21 @@
 import { db } from "../config/db.js";
 import { io } from "../../server.js"; // notify dashboard updates
 
+// Helper function to log inventory activities
+async function logInventoryActivity({ userId, branchId, activityType, description, referenceId }) {
+  try {
+    await db.query(
+      `INSERT INTO activity_logs
+        (user_id, branch_id, activity_type, description, reference_id)
+       VALUES (?, ?, ?, ?, ?)`,
+      [userId, branchId, activityType, description, referenceId]
+    );
+  } catch (err) {
+    console.error('Failed to log inventory activity:', err);
+    // Don't throw error to avoid breaking the main operation
+  }
+}
+
 export const addIngredient = async (req, res) => {
   try {
     console.log("REQ.USER:", req.user);
@@ -48,6 +63,16 @@ export const addIngredient = async (req, res) => {
     const [result] = await db.execute(query, values);
 
     console.log("Ingredient inserted with ID:", result.insertId);
+    
+    // Log the activity
+    await logInventoryActivity({
+      userId: req.user.user_id,
+      branchId: branch_id,
+      activityType: 'inventory_add',
+      description: `Added ingredient: ${item_name} (${quantity} units)`,
+      referenceId: result.insertId
+    });
+    
     // notify dashboard
     io.to(`branch_${branch_id}`).emit('dashboardUpdate', { branch_id });
     res.status(201).json({ message: "Ingredient added successfully", id: result.insertId });
@@ -270,6 +295,15 @@ export const editIngredientById = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Ingredient not found or no permission" });
     }
+
+    // Log the activity
+    await logInventoryActivity({
+      userId: req.user.user_id,
+      branchId: branch_id,
+      activityType: 'inventory_adjustment',
+      description: `Updated ingredient: ${item_name} (quantity: ${quantity})`,
+      referenceId: id
+    });
 
     // notify dashboard for branch
     io.to(`branch_${branch_id}`).emit('dashboardUpdate', { branch_id });

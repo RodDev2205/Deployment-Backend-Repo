@@ -4,15 +4,25 @@ import { db } from "../config/db.js";
 // GET /api/activity-logs
 export const getActivityLogs = async (req, res) => {
   try {
-    const [rows] = await db.query(
-      `SELECT al.log_id, u.username AS user, al.activity_type, al.description AS action,
-              al.reference_id, al.created_at AS timestamp, b.branch_name AS branch
-       FROM activity_logs al
-       LEFT JOIN users u ON al.user_id = u.user_id
-       LEFT JOIN branches b ON al.branch_id = b.branch_id
-       ORDER BY al.created_at DESC
-       LIMIT 500` // optional limit
-    );
+    const { branch_id, role_id } = req.user;
+    let query = `
+      SELECT al.log_id, u.username AS user, al.activity_type, al.description AS action,
+             al.reference_id, al.created_at AS timestamp, b.branch_name AS branch
+      FROM activity_logs al
+      LEFT JOIN users u ON al.user_id = u.user_id
+      LEFT JOIN branches b ON al.branch_id = b.branch_id
+    `;
+    const params = [];
+
+    // Filter by branch for admin users (role 2)
+    if (role_id === 2) {
+      query += ` WHERE al.branch_id = ?`;
+      params.push(branch_id);
+    }
+
+    query += ` ORDER BY al.created_at DESC LIMIT 500`;
+
+    const [rows] = await db.query(query, params);
 
     res.json(rows);
   } catch (err) {
