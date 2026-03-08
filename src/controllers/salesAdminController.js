@@ -206,7 +206,7 @@ export const getVoidTracking = async (req, res) => {
     const query = `
       SELECT 
         t.transaction_number,
-        u.name AS cashier,
+        u.username AS cashier,
         CASE 
           WHEN t.status = 'Voided' THEN 'Full Void'
           ELSE COALESCE(p.product_name, CONCAT('Menu ID: ', ti.menu_id))
