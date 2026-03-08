@@ -26,9 +26,9 @@ export const getLoginLogs = async (req, res) => {
   try {
     const { branch_id, role_id } = req.user;
     let query = `
-      SELECT ll.id AS log_id, ll.username_attempted AS user, 'Security' AS type, 
+      SELECT ll.login_log_id AS log_id, ll.username_attempted AS user, 'Security' AS type, 
              CASE WHEN ll.status = 'SUCCESS' THEN 'Login Success' ELSE 'Login Failed' END AS action,
-             ll.reason AS details, ll.ip_address, ll.timestamp,
+             ll.reason AS details, ll.ip_address, ll.created_at AS timestamp,
              CASE WHEN ll.status = 'SUCCESS' THEN 'Info' ELSE 'Warning' END AS severity
       FROM login_logs ll
     `;
