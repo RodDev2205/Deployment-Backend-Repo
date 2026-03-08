@@ -6,15 +6,14 @@ export const getSalesByPeriod = async (req, res) => {
   const branch_id = req.user.branch_id;
   const role_id = req.user.role_id;
 
-  // determine grouping expression and label
+  // determine grouping expression
   let groupExpr;
   switch (period) {
     case 'weekly':
-      // produce string like "2023-05" for ISO year-week
+      // ISO year-week
       groupExpr = `CONCAT(YEAR(t.created_at), '-', LPAD(WEEK(t.created_at,1),2,'0'))`;
       break;
     case 'monthly':
-      // produce string like "2023-02" for year-month
       groupExpr = `CONCAT(YEAR(t.created_at), '-', LPAD(MONTH(t.created_at),2,'0'))`;
       break;
     default:
@@ -23,37 +22,33 @@ export const getSalesByPeriod = async (req, res) => {
   }
 
   try {
-    // aggregate using transaction_items so we can compute gross/net sales correctly
     let query = `
       SELECT
         ${groupExpr} as period_key,
         t.branch_id,
-        COUNT(DISTINCT t.transaction_id) as transaction_count,
+        COUNT(CASE WHEN t.status = 'Completed' THEN 1 END) as transaction_count,
         SUM((ti.quantity - ti.voided_quantity) * ti.price) as total_sales,
-        SUM((ti.quantity + ti.voided_quantity) * ti.price) as gross_sales,
-        SUM(ti.voided_quantity * ti.price) as voided_sales,
         COUNT(CASE WHEN t.status = 'Voided' THEN 1 END) as voided_count,
-        COUNT(CASE WHEN t.status = 'Partial Voided' THEN 1 END) as partial_voided_count,
         COUNT(CASE WHEN t.status = 'Refunded' THEN 1 END) as refunded_count,
         COUNT(CASE WHEN t.status = 'Partial Refunded' THEN 1 END) as partial_refunded_count
       FROM transactions t
-      LEFT JOIN transaction_items ti ON ti.transaction_id = t.transaction_id
+      LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id
     `;
 
     let params = [];
 
     if (role_id === 2) {
-      query += ` WHERE branch_id = ?`;
+      query += ` WHERE t.branch_id = ?`;
       params.push(branch_id);
     }
 
     if (startDate && endDate) {
       const dateFilter = role_id === 2 ? ` AND ` : ` WHERE `;
-      query += `${dateFilter} DATE(created_at) BETWEEN ? AND ?`;
+      query += `${dateFilter} DATE(t.created_at) BETWEEN ? AND ?`;
       params.push(startDate, endDate);
     }
 
-    query += ` GROUP BY ${groupExpr}, branch_id ORDER BY ${groupExpr} DESC`;
+    query += ` GROUP BY ${groupExpr}, t.branch_id ORDER BY ${groupExpr} DESC`;
 
     const [results] = await db.query(query, params);
     res.json(results || []);
@@ -87,18 +82,18 @@ export const getDailySalesByBranch = async (req, res) => {
 
     // Filter by branch if admin (role 2), superadmin (role 3) sees all branches
     if (role_id === 2) {
-      query += ` WHERE t.branch_id = ?`;
+      query += ` WHERE branch_id = ?`;
       params.push(branch_id);
     }
 
     // Add date filtering if provided
     if (startDate && endDate) {
       const dateFilter = role_id === 2 ? ` AND ` : ` WHERE `;
-      query += `${dateFilter} DATE(t.created_at) BETWEEN ? AND ?`;
+      query += `${dateFilter} DATE(created_at) BETWEEN ? AND ?`;
       params.push(startDate, endDate);
     }
 
-    query += ` GROUP BY ${groupExpr}, t.branch_id ORDER BY ${groupExpr} DESC`;
+    query += ` GROUP BY DATE(created_at), branch_id ORDER BY date DESC`;
 
     const [results] = await db.query(query, params);
 
@@ -183,48 +178,43 @@ export const getSalesTodayByBranch = async (req, res) => {
   }
 };
 
-// Get breakdown of payment methods (cash vs gcash) over a date range
-// Get breakdown of payment methods (cash vs gcash) over a date range
+// Get breakdown of transaction statuses (Completed, Voided, Partial Voided) over a date range
 export const getPaymentMethodBreakdown = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     const branch_id = req.user.branch_id;
     const role_id = req.user.role_id;
 
-    // Build query to count transactions by status
-    let baseQuery = `
+    // Build query
+    let query = `
       SELECT status, COUNT(*) AS cnt
       FROM transactions
-      WHERE status IN ('Completed','Voided','Partial Voided')
+      WHERE DATE(created_at) BETWEEN ? AND ?
     `;
-    const params = [];
+    const params = [startDate, endDate];
 
-    // Branch filter for admin
     if (role_id === 2) {
-      baseQuery += ` AND branch_id = ?`;
+      query += ` AND branch_id = ?`;
       params.push(branch_id);
     }
 
-    // Date range filter
-    if (startDate && endDate) {
-      baseQuery += ` AND DATE(created_at) BETWEEN ? AND ?`;
-      params.push(startDate, endDate);
-    }
+    query += ` GROUP BY status`;
 
-    baseQuery += ` GROUP BY status`;
-
-    const [results] = await db.query(baseQuery, params);
-
-    // Normalize to always supply all three statuses
-    const statuses = ['Completed','Voided','Partial Voided'];
-    const normalized = statuses.map(s => {
-      const row = results.find(r => r.status === s);
-      return { status: s, count: row ? Number(row.cnt) : 0 };
+    const [results] = await db.query(query, params);
+    res.json(results);
+  } catch (error) {
+    console.error("GET STATUS BREAKDOWN ERROR:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+    const normalized = methods.map(m => {
+      const row = results.find(r => r.payment_method === m);
+      return { payment_method: m, count: row ? Number(row.cnt) : 0 };
     });
 
     res.json(normalized);
   } catch (error) {
-    console.error("GET STATUS BREAKDOWN ERROR:", error);
+    console.error("GET PAYMENT METHOD BREAKDOWN ERROR:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
