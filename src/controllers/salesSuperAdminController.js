@@ -177,6 +177,7 @@ export async function getVoidTransactions(req, res) {
     let query = `
       SELECT
         t.transaction_id,
+        t.transaction_number,
         t.status,
         t.created_at,
         t.cashier_id,
