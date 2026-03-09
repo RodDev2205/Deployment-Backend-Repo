@@ -202,14 +202,14 @@ export async function getTopMenuSalesByBranch(req, res) {
 
     let query = `
       SELECT 
-             m.menu_id,
-             m.menu_name,
+             p.product_id AS menu_id,
+             p.product_name AS menu_name,
              b.branch_id,
              b.branch_name,
              IFNULL(SUM(CASE WHEN t.status='Completed' THEN ti.quantity * ti.price ELSE 0 END), 0) AS total_sales
       FROM transactions t
       LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id
-      LEFT JOIN menus m ON ti.menu_id = m.menu_id
+      LEFT JOIN products p ON ti.menu_id = p.product_id
       LEFT JOIN branches b ON t.branch_id = b.branch_id
     `;
     const params = [];
@@ -221,7 +221,7 @@ export async function getTopMenuSalesByBranch(req, res) {
     }
 
     query += `
-      GROUP BY m.menu_id, m.menu_name, b.branch_id, b.branch_name
+      GROUP BY p.product_id, p.product_name, b.branch_id, b.branch_name
       HAVING total_sales > 0
       ORDER BY total_sales DESC
       LIMIT 50
