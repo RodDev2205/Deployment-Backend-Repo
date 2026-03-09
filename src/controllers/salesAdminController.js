@@ -124,7 +124,8 @@ export const getSalesTodayByBranch = async (req, res) => {
         COUNT(*) as all_transaction_count,
         MAX(CASE WHEN t.status = 'Completed' THEN t.total_amount ELSE NULL END) as max_order_value,
         MIN(CASE WHEN t.status = 'Completed' THEN t.total_amount ELSE NULL END) as min_order_value,
-        AVG(CASE WHEN t.status = 'Completed' THEN t.total_amount ELSE NULL END) as avg_order_value,
+    // Calculate avg_order_value from net sales and completed transaction count
+    const avgOrderValue = result?.completed_count > 0 ? Number((net_sales / result.completed_count).toFixed(2)) : 0;
         COUNT(DISTINCT CASE WHEN t.status IN ('Voided', 'Partial Voided') THEN t.cashier_id ELSE NULL END) as staff_who_voided_count
       FROM transactions t
       WHERE DATE(t.created_at) = CURDATE()
@@ -161,6 +162,9 @@ export const getSalesTodayByBranch = async (req, res) => {
     const voided_sales = Number(itemsResult?.voided_sales || 0);
     const net_sales = gross_sales - voided_sales;
 
+    // Calculate avg_order_value from net sales and completed transaction count
+    const avgOrderValue = result?.completed_count > 0 ? Number((net_sales / result.completed_count).toFixed(2)) : 0;
+
     res.json({
       total_sales: net_sales, // Net sales after voids (current remaining value)
       gross_sales: gross_sales, // Total value of all items originally ordered
@@ -174,7 +178,7 @@ export const getSalesTodayByBranch = async (req, res) => {
       staff_who_voided_count: result?.staff_who_voided_count || 0,
       max_order_value: Number(result?.max_order_value || 0),
       min_order_value: Number(result?.min_order_value || 0),
-      avg_order_value: Number(result?.avg_order_value || 0),
+      avg_order_value: avgOrderValue,
     });
   } catch (error) {
     console.error("GET TODAY SALES ERROR:", error);
