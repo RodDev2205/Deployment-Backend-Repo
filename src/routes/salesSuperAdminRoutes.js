@@ -1,7 +1,7 @@
 import express from 'express';
 import { verifyToken } from '../middlewares/verifyToken.js';
 import { requireRole } from '../middlewares/requireRole.js';
-import { getKpis, getBranches, getBranchSalesSummary, getTopMenuSalesByBranch } from '../controllers/salesSuperAdminController.js';
+import { getKpis, getBranches, getBranchSalesSummary, getTopMenuSalesByBranch, getVoidTransactions } from '../controllers/salesSuperAdminController.js';
 import { getRecentTransactions } from '../controllers/transactionController.js';
 import { getSalesTrend } from '../controllers/salesTrendController.js';
 import { getBranchComparison } from '../controllers/salesBranchComparisonController.js';
@@ -28,6 +28,8 @@ router.get('/dashboard-stats', requireRole(2, 3), getDashboardStats);
 router.get('/branch-sales-summary', requireRole(2, 3), getBranchSalesSummary);
 // top menu sales by branch
 router.get('/top-menu-sales', requireRole(2, 3), getTopMenuSalesByBranch);
+// void transactions endpoint
+router.get('/void-transactions', requireRole(2, 3), getVoidTransactions);
 // recent transactions for a branch (query: branchId, limit)
 router.get('/recent-transactions', requireRole(2, 3), getRecentTransactions);
 

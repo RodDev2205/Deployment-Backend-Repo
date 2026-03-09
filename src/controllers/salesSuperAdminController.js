@@ -154,9 +154,69 @@ export async function getKpis(req, res) {
   }
 }
 
+export async function getVoidTransactions(req, res) {
+  try {
+    const { startDate, endDate, branchId } = req.query;
+
+    // Default to month-to-date
+    const now = new Date();
+    const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const defaultEnd = now;
+
+    const parseDate = (d) => {
+      if (!d) return null;
+      return new Date(d + 'T00:00:00');
+    };
+
+    const start = startDate ? parseDate(startDate) : defaultStart;
+    const end = endDate ? parseDate(endDate) : defaultEnd;
+
+    const startSql = `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,'0')}-${String(start.getDate()).padStart(2,'0')} 00:00:00`;
+    const endSql = `${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')} 23:59:59`;
+
+    let query = `
+      SELECT
+        t.transaction_id,
+        t.status,
+        t.created_at,
+        t.cashier_id,
+        u.name as cashier_name,
+        b.branch_name,
+        COALESCE(SUM(ti.voided_quantity * ti.price), 0) as void_amount
+      FROM transactions t
+      LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id
+      LEFT JOIN users u ON t.cashier_id = u.user_id
+      LEFT JOIN branches b ON t.branch_id = b.branch_id
+      WHERE t.status IN ('Voided', 'Partial Refunded', 'Partial Voided')
+        AND t.created_at BETWEEN ? AND ?
+    `;
+
+    const params = [startSql, endSql];
+
+    // Filter by branch if specified
+    if (branchId && branchId !== 'all') {
+      query += ` AND t.branch_id = ?`;
+      params.push(parseInt(branchId));
+    }
+
+    query += `
+      GROUP BY t.transaction_id, t.status, t.created_at, t.cashier_id, u.name, b.branch_name
+      ORDER BY t.created_at DESC
+    `;
+
+    const [rows] = await db.execute(query, params);
+
+    return res.json(rows || []);
+  } catch (err) {
+    console.error('getVoidTransactions error', err);
+    return res.status(500).json({ message: 'Failed to fetch void transactions', error: err.message });
+  }
+}
+
 export default {
   getKpis,
   getBranches,
+  getVoidTransactions,
 };
 
 export async function getBranches(req, res) {
