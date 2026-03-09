@@ -1,8 +1,5 @@
 export const requireRole = (...allowedRoles) => {
   return (req, res, next) => {
-    console.log("requireRole - req.user:", req.user); // DEBUG
-    console.log("requireRole - allowedRoles:", allowedRoles); // DEBUG
-
     if (!req.user) {
       return res.status(401).json({ error: "Unauthorized" });
     }

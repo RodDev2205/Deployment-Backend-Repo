@@ -14,8 +14,6 @@ export async function getSalesTrend(req, res) {
     const role_id = req.user.role_id;
     const userBranch = req.user.branch_id;
 
-    console.log('getSalesTrend called', { period, startDate, endDate, branchId, role_id });
-
     // if caller is admin (role 2), force branchId to their branch
     if (role_id === 2) {
       branchId = userBranch;
