@@ -180,7 +180,7 @@ export async function getVoidTransactions(req, res) {
         t.status,
         t.created_at,
         t.cashier_id,
-        u.name as cashier_name,
+        u.Username as cashier_name,
         b.branch_name,
         COALESCE(SUM(ti.voided_quantity * ti.price), 0) as void_amount
       FROM transactions t
@@ -200,7 +200,7 @@ export async function getVoidTransactions(req, res) {
     }
 
     query += `
-      GROUP BY t.transaction_id, t.status, t.created_at, t.cashier_id, u.name, b.branch_name
+      GROUP BY t.transaction_id, t.status, t.created_at, t.cashier_id, u.Username, b.branch_name
       ORDER BY t.created_at DESC
     `;
 
