@@ -76,7 +76,7 @@ export async function getKpis(req, res) {
       `SELECT COALESCE(SUM((ti.quantity + ti.voided_quantity) * ti.price), 0) AS gross_sales 
        FROM transactions t 
        LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id 
-       WHERE ${grossWhereClause.replace('created_at BETWEEN ? AND ?', 't.created_at BETWEEN ? AND ?')}`,
+       WHERE ${grossWhereClause}`,
       grossParams
     );
 
