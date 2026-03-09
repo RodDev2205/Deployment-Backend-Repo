@@ -1,6 +1,11 @@
 import { db } from "../config/db.js";
 import { io } from "../../server.js"; // used to notify realtime updates
 
+// NOTE: Ensure your database schema includes an `order_type` column in transactions,
+// e.g.:
+// ALTER TABLE transactions ADD COLUMN order_type VARCHAR(20) NOT NULL DEFAULT 'dine-in';
+// values will be 'dine-in' or 'takeout'.
+
 // Helper function to log POS activities
 async function logPOSActivity({ userId, branchId, activityType, description, referenceId }) {
   try {
@@ -27,8 +32,9 @@ const generateTransactionNumber = () => {
 };
 
 export const completeSale = async (req, res) => {
-  const { cart, paymentMethod, amountPaid, discount } = req.body;
+  const { cart, paymentMethod, amountPaid, discount, orderType } = req.body;
   const user = req.user; // From JWT token
+  const order_type = orderType && (orderType === 'takeout' || orderType === 'dine-in') ? orderType : 'dine-in';
 
   if (!cart || cart.length === 0) {
     return res.status(400).json({ success: false, message: "Cart is empty" });
@@ -183,8 +189,8 @@ export const completeSale = async (req, res) => {
 
     const [transactionResult] = await connection.query(
       `INSERT INTO transactions 
-       (transaction_number, subtotal, discount_type, discount_value, discount_amount, total_amount, payment_method, amount_paid, change_amount, cashier_id, branch_id, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (transaction_number, subtotal, discount_type, discount_value, discount_amount, total_amount, payment_method, amount_paid, change_amount, cashier_id, branch_id, status, order_type)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         transactionNumber,
         subtotal,
@@ -198,6 +204,7 @@ export const completeSale = async (req, res) => {
         user.user_id,
         user.branch_id,
         'Completed',
+        order_type,
       ]
     );
 
@@ -222,7 +229,7 @@ export const completeSale = async (req, res) => {
       userId: user.user_id,
       branchId: user.branch_id,
       activityType: 'transaction_completed',
-      description: `Completed transaction ${transactionNumber} - Total: ₱${totalAmount.toFixed(2)}, Paid: ₱${amountPaid.toFixed(2)}`,
+      description: `Completed transaction ${transactionNumber} (${order_type}) - Total: ₱${totalAmount.toFixed(2)}, Paid: ₱${amountPaid.toFixed(2)}`,
       referenceId: transactionId
     });
 
@@ -254,7 +261,7 @@ export const getUserTransactions = async (req, res) => {
 
     // All users (including admins) see only their own transactions
     const [rows] = await db.query(
-      `SELECT transaction_id, transaction_number, created_at, total_amount, amount_paid, status
+      `SELECT transaction_id, transaction_number, created_at, total_amount, amount_paid, status, order_type
        FROM transactions
        WHERE cashier_id = ? AND branch_id = ?
        ORDER BY created_at DESC`,
