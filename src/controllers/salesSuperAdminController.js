@@ -80,6 +80,15 @@ export async function getKpis(req, res) {
       grossParams
     );
 
+    // 1.6) Voided sales (filtered by branch/date if selected) - VALUE OF VOIDED PORTIONS
+    const [voidedRows] = await db.execute(
+      `SELECT COALESCE(SUM(ti.voided_quantity * ti.price), 0) AS voided_sales 
+       FROM transactions t 
+       LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id 
+       WHERE ${grossWhereClause}`,
+      grossParams
+    );
+
     // 2) Total transactions (filtered by branch if selected)
     const [countRows] = await db.execute(
       `SELECT COUNT(*) AS transaction_count FROM transactions t WHERE ${whereClause}`,
@@ -99,32 +108,20 @@ export async function getKpis(req, res) {
       statusParams
     );
 
-    // 4) Average order value (filtered by branch if selected)
-    const [avgRows] = await db.execute(
-      `SELECT AVG(net_total) AS avg_order_value 
-       FROM (
-         SELECT t.transaction_id, COALESCE(SUM(ti.quantity * ti.price), 0) as net_total 
-         FROM transactions t 
-         LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id 
-         WHERE ${whereClause.replace('status = \'Completed\' AND created_at BETWEEN ? AND ?', 't.status = \'Completed\' AND t.created_at BETWEEN ? AND ?')} 
-         GROUP BY t.transaction_id
-       ) as sub`,
-      params
-    );
-
     // 4) Active branches (ALWAYS unfiltered - shows all branches with activity)
     const [branchRows] = await db.execute(
       `SELECT COUNT(DISTINCT t.branch_id) AS active_branches FROM transactions t WHERE t.status = 'Completed' AND t.created_at BETWEEN ? AND ?`,
       [startSql, endSql]
     );
 
-    const totalSales = Number(totalRows[0].total_sales || 0);
     const grossSales = Number(grossRows[0].gross_sales || 0);
+    const voidedSales = Number(voidedRows[0].voided_sales || 0);
+    const netSales = grossSales - voidedSales;
     const transactionCount = Number(countRows[0].transaction_count || 0);
     const partialRefunded = statusRows[0]?.partial_refunded_count || 0;
     const refunded = statusRows[0]?.refunded_count || 0;
     const voided = statusRows[0]?.voided_count || 0;
-    const avgOrderValue = Number(avgRows[0].avg_order_value || 0);
+    const avgOrderValue = transactionCount > 0 ? Number((netSales / transactionCount).toFixed(2)) : 0;
     const activeBranches = Number(branchRows[0].active_branches || 0);
 
     // compute average transactions per day
@@ -137,13 +134,14 @@ export async function getKpis(req, res) {
     const monthToDateDays = Math.floor((now - startOfMonth) / msPerDay) + 1;
 
     return res.json({
-      total_sales: totalSales,
       gross_sales: grossSales,
+      voided_sales: voidedSales,
+      total_sales: netSales,
       transaction_count: transactionCount,
       partial_refunded_count: partialRefunded,
       refunded_count: refunded,
       voided_count: voided,
-      avg_order_value: Number(avgOrderValue.toFixed(2)),
+      avg_order_value: avgOrderValue,
       active_branches: activeBranches,
       avg_transactions_per_day: Number(avgTransactionsPerDay.toFixed(2)),
       month_to_date_days: monthToDateDays,
