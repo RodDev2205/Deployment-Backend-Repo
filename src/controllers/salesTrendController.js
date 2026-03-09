@@ -42,33 +42,33 @@ export async function getSalesTrend(req, res) {
     switch (period) {
       case 'hourly':
         // group by hour within the date range; include date for multi‑day requests
-        groupExpr = "DATE_FORMAT(created_at, '%Y-%m-%d %H:00:00')";
+        groupExpr = "DATE_FORMAT(t.created_at, '%Y-%m-%d %H:00:00')";
         break;
       case 'weekly':
         // ISO week number (1-53)
-        groupExpr = `CONCAT(YEAR(created_at), '-', LPAD(WEEK(created_at,1),2,'0'))`;
+        groupExpr = `CONCAT(YEAR(t.created_at), '-', LPAD(WEEK(t.created_at,1),2,'0'))`;
         break;
       case 'monthly':
-        groupExpr = `CONCAT(YEAR(created_at), '-', LPAD(MONTH(created_at),2,'0'))`;
+        groupExpr = `CONCAT(YEAR(t.created_at), '-', LPAD(MONTH(t.created_at),2,'0'))`;
         break;
       case 'quarterly':
         // group by calendar quarter
-        groupExpr = `CONCAT(YEAR(created_at), '-Q', QUARTER(created_at))`;
+        groupExpr = `CONCAT(YEAR(t.created_at), '-Q', QUARTER(t.created_at))`;
         break;
       case 'yearly':
-        groupExpr = `YEAR(created_at)`;
+        groupExpr = `YEAR(t.created_at)`;
         break;
       case 'daily':
       default:
-        groupExpr = `DATE(created_at)`;
+        groupExpr = `DATE(t.created_at)`;
         break;
     }
 
     // build where clause; always filter completed and date range
-    let where = `status = 'Completed' AND created_at BETWEEN ? AND ?`;
+    let where = `t.status = 'Completed' AND t.created_at BETWEEN ? AND ?`;
     const params = [startSql, endSql];
     if (branchId && branchId !== 'all') {
-      where += ` AND branch_id = ?`;
+      where += ` AND t.branch_id = ?`;
       params.push(parseInt(branchId));
     }
 

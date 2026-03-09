@@ -57,18 +57,16 @@ export async function getKpis(req, res) {
 
     // 1) Total sales (filtered by branch if selected)
     const [totalRows] = await db.execute(
-      `SELECT 
-         COALESCE(SUM(CASE WHEN t.status = 'Completed' THEN ti.quantity * ti.price ELSE 0 END), 0) AS total_sales,
-         COALESCE(SUM(ti.quantity * ti.price), 0) AS gross_sales
+      `SELECT COALESCE(SUM(ti.quantity * ti.price), 0) AS total_sales 
        FROM transactions t 
        LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id 
-       WHERE ${whereClause.replace('status = \'Completed\' AND created_at BETWEEN ? AND ?', 't.created_at BETWEEN ? AND ?')}`,
+       WHERE ${whereClause.replace('status = \'Completed\' AND created_at BETWEEN ? AND ?', 't.status = \'Completed\' AND t.created_at BETWEEN ? AND ?')}`,
       params
     );
 
     // 2) Total transactions (filtered by branch if selected)
     const [countRows] = await db.execute(
-      `SELECT COUNT(*) AS transaction_count FROM transactions WHERE ${whereClause}`,
+      `SELECT COUNT(*) AS transaction_count FROM transactions t WHERE ${whereClause}`,
       params
     );
 
@@ -100,12 +98,11 @@ export async function getKpis(req, res) {
 
     // 4) Active branches (ALWAYS unfiltered - shows all branches with activity)
     const [branchRows] = await db.execute(
-      `SELECT COUNT(DISTINCT branch_id) AS active_branches FROM transactions WHERE status = 'Completed' AND created_at BETWEEN ? AND ?`,
+      `SELECT COUNT(DISTINCT t.branch_id) AS active_branches FROM transactions t WHERE t.status = 'Completed' AND t.created_at BETWEEN ? AND ?`,
       [startSql, endSql]
     );
 
     const totalSales = Number(totalRows[0].total_sales || 0);
-    const grossSales = Number(totalRows[0].gross_sales || 0);
     const transactionCount = Number(countRows[0].transaction_count || 0);
     const partialRefunded = statusRows[0]?.partial_refunded_count || 0;
     const refunded = statusRows[0]?.refunded_count || 0;
@@ -124,7 +121,6 @@ export async function getKpis(req, res) {
 
     return res.json({
       total_sales: totalSales,
-      gross_sales: grossSales,
       transaction_count: transactionCount,
       partial_refunded_count: partialRefunded,
       refunded_count: refunded,
