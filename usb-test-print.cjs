@@ -15,10 +15,10 @@ const queue = [];
 function connectPrinter() {
   if (reconnecting || isOpen) return;
 
-  console.log("🔍 Checking printer (COM3)...");
+  console.log("🔍 Checking printer (COM5)...");
 
   port = new SerialPort({
-    path: "COM3",
+    path: "COM5",
     baudRate: 9600,
     autoOpen: false,
   });
