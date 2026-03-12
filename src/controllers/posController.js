@@ -284,7 +284,8 @@ export const getTransactionDetails = async (req, res) => {
 
     // Fetch transaction header
     const [[transaction]] = await db.query(
-      `SELECT t.*, u.username AS cashier_name, b.branch_name
+      `SELECT t.*, u.username AS cashier_name, b.branch_name,
+              b.address AS branch_address, b.contact_number AS branch_contact
        FROM transactions t
        LEFT JOIN users u ON t.cashier_id = u.user_id
        LEFT JOIN branches b ON t.branch_id = b.branch_id
@@ -310,6 +311,7 @@ export const getTransactionDetails = async (req, res) => {
       [transactionId]
     );
 
+    // transaction object now includes branch_address and branch_contact
     res.status(200).json({ transaction, items });
   } catch (error) {
     console.error("DB ERROR (getTransactionDetails):", error);
