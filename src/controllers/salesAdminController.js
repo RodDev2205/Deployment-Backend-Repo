@@ -285,7 +285,7 @@ export const getTopProductsByBranch = async (req, res) => {
       FROM transaction_items ti
       JOIN transactions t ON ti.transaction_id = t.transaction_id
       LEFT JOIN products p ON ti.menu_id = p.product_id
-      WHERE t.status = 'Completed'
+      WHERE t.status IN ('Completed', 'Partial Voided')
     `;
     const params = [];
 
