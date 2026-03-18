@@ -59,7 +59,7 @@ export const createAdmin = async (req, res) => {
   try {
     // token payload uses user_id field, not id
     const superadminId = req.user.user_id;
-    const { first_name, last_name, username, password, branch_id } = req.body; // match frontend
+    const { first_name, last_name, username, password, branch_id, contact_number } = req.body; // match frontend
     if (!first_name || !last_name || !username || !password || !branch_id) {
       return res.status(400).json({ error: "All fields are required" });
     }
