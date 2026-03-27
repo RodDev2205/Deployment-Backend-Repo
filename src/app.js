@@ -26,7 +26,7 @@ dotenv.config();
 const app = express();
 
 const allowedOrigins = [
-  "http://localhost:5200",
+  "http://localhost:5173",
   "https://deployment-frontend-repo.vercel.app",
   process.env.FRONTEND_URL
 ].filter(Boolean);
