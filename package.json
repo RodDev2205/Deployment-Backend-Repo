@@ -29,6 +29,7 @@
     "node-thermal-printer": "^4.5.0",
     "nodemon": "^3.1.11",
     "socket.io": "^4.8.3",
-    "usb": "^2.16.0"
+    "usb": "^2.16.0",
+    "@supabase/supabase-js": "^2.100.1"
   }
 }

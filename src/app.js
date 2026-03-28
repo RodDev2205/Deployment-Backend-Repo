@@ -20,6 +20,7 @@ import activityRoutes from "./routes/activityRoutes.js"; // <-- import activity 
 import salesAdminRoutes from "./routes/salesAdminRoutes.js"; // <-- import sales admin routes
 import salesSuperAdminRoutes from "./routes/salesSuperAdminRoutes.js"; // <-- import sales superadmin routes
 import inventoryRoutes from "./routes/inventoryRoutes.js"; // <-- import inventory routes 
+import feedbackRoutes from "./routes/feedbackRoutes.js"; // <-- import feedback route
 
 dotenv.config();
 
@@ -60,6 +61,7 @@ app.use("/api/inventory", inventoryRoutes); // <-- register inventory routes
 app.use("/api/sales-admin", salesAdminRoutes); // <-- register sales admin routes
 app.use("/api/sales-superadmin", salesSuperAdminRoutes); // register sales superadmin routes
 app.use("/api/activity-logs", activityRoutes);
+app.use("/api/feedback", feedbackRoutes);
 // Print route
 
 app.post("/api/print-receipt", async (req, res) => {
