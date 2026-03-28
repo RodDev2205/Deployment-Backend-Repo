@@ -12,7 +12,7 @@ export const createFeedback = async (req, res) => {
     }
 
     const [rows] = await db.execute(
-      'SELECT user_id, full_name, role_id, branch_id FROM users WHERE user_id = ?',
+      'SELECT user_id, first_name, full_name, role_id, branch_id FROM users WHERE user_id = ?',
       [user_id]
     );
 
@@ -23,7 +23,7 @@ export const createFeedback = async (req, res) => {
     const { data, error } = await supabase.from('feedback').insert([
       {
         user_id: user.user_id,
-        name: user.full_name,
+        name: user.full_name || user.first_name,
         role: user.role_id,
         branch: user.branch_id,
         type,
