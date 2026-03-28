@@ -3,7 +3,7 @@ import supabase from '../config/supabaseClient.js';
 
 export const createFeedback = async (req, res) => {
   try {
-    const { user_id, type, message, details } = req.body;
+    const { user_id, type, message, system_name, screenshot_url } = req.body;
 
     if (!user_id || !type || !message) {
       return res.status(400).json({
@@ -12,7 +12,7 @@ export const createFeedback = async (req, res) => {
     }
 
     const [rows] = await db.execute(
-      'SELECT user_id, first_name, role_id, branch_id FROM users WHERE user_id = ?',
+      'SELECT user_id, full_name, role_id, branch_id FROM users WHERE user_id = ?',
       [user_id]
     );
 
@@ -23,14 +23,14 @@ export const createFeedback = async (req, res) => {
     const { data, error } = await supabase.from('feedback').insert([
       {
         user_id: user.user_id,
-        name: user.first_name,
+        name: user.full_name,
         role: user.role_id,
         branch: user.branch_id,
         type,
         message,
-        details: details || null,
-        status: 'open',
-        source: 'client',
+        status: 'pending',
+        system_name: system_name || null,
+        screenshot_url: screenshot_url || null,
       },
     ]);
 
