@@ -198,39 +198,45 @@ async function sendOTPViaSendGrid(email, code) {
 
   console.log('Sending OTP email to:', email, 'with code length:', code.length);
 
+  const requestBody = {
+    personalizations: [{
+      to: [{ email: email }]
+    }],
+    from: {
+      email: 'coderabonline@gmail.com', // Replace with your verified sender email
+      name: 'POS System'
+    },
+    subject: 'Your OTP Code',
+    content: [{
+      type: 'text/html',
+      value: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #333;">Password Reset OTP</h2>
+          <p style="font-size: 16px; line-height: 1.5;">Your OTP code is:</p>
+          <div style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 20px; text-align: center; margin: 20px 0;">
+            <span style="font-size: 24px; font-weight: bold; color: #007bff;">${code}</span>
+          </div>
+          <p style="font-size: 14px; color: #666;">This code will expire in 5 minutes.</p>
+          <p style="font-size: 14px; color: #666;">If you didn't request this code, please ignore this email.</p>
+          <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+          <p style="font-size: 12px; color: #999;">This is an automated message from POS System.</p>
+        </div>
+      `
+    }]
+  };
+
+  console.log('SendGrid request body:', JSON.stringify(requestBody, null, 2));
+
   const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`
     },
-    body: JSON.stringify({
-      personalizations: [{
-        to: [{ email: email }]
-      }],
-      from: {
-        email: 'coderabonline@gmail.com', // Replace with your verified sender email
-        name: 'POS System'
-      },
-      subject: 'Your OTP Code',
-      content: [{
-        type: 'text/html',
-        value: `
-          <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #333;">Password Reset OTP</h2>
-            <p style="font-size: 16px; line-height: 1.5;">Your OTP code is:</p>
-            <div style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 20px; text-align: center; margin: 20px 0;">
-              <span style="font-size: 24px; font-weight: bold; color: #007bff;">${code}</span>
-            </div>
-            <p style="font-size: 14px; color: #666;">This code will expire in 5 minutes.</p>
-            <p style="font-size: 14px; color: #666;">If you didn't request this code, please ignore this email.</p>
-            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-            <p style="font-size: 12px; color: #999;">This is an automated message from POS System.</p>
-          </div>
-        `
-      }]
-    })
+    body: JSON.stringify(requestBody)
   });
+
+  console.log('SendGrid response status:', response.status);
 
   if (!response.ok) {
     let errorMessage = 'Failed to send OTP email';
@@ -241,12 +247,26 @@ async function sendOTPViaSendGrid(email, code) {
         errorMessage = errorData.errors[0].message || errorMessage;
       }
     } catch (parseError) {
-      console.error('Failed to parse SendGrid error response:', await response.text());
+      // If response is not JSON, get text instead
+      const errorText = await response.text();
+      console.error('SendGrid API error (non-JSON):', errorText);
+      errorMessage = `SendGrid API error (${response.status}): ${errorText || 'Unknown error'}`;
     }
     throw new Error(errorMessage);
   }
 
-  const data = await response.json();
+  // SendGrid returns empty body on success, so handle gracefully
+  let data = null;
+  try {
+    const responseText = await response.text();
+    if (responseText) {
+      data = JSON.parse(responseText);
+    }
+  } catch (parseError) {
+    // Empty response is normal for SendGrid success
+    console.log('SendGrid returned empty response (normal for success)');
+  }
+
   return data;
 }
 
