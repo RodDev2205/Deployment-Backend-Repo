@@ -189,6 +189,44 @@ export const signup = async (req, res) => {
   }
 };
 
+async function sendOTPViaResend(email, code) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.error('Missing RESEND_API_KEY in environment');
+    throw new Error('Email service not configured');
+  }
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      from: 'noreply@resend.dev',
+      to: email,
+      subject: 'Your OTP Code',
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
+          <h2>Password Reset OTP</h2>
+          <p>Your OTP code is <strong>${code}</strong></p>
+          <p>This code will expire in 5 minutes.</p>
+          <p>If you didn't request this code, please ignore this email.</p>
+        </div>
+      `
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    console.error('Resend API error:', error);
+    throw new Error('Failed to send OTP email');
+  }
+
+  const data = await response.json();
+  return data;
+}
+
 async function createOTPandStore(username, email) {
   const [users] = await db.query(
     "SELECT user_id FROM users WHERE username = ? AND email = ?",
@@ -209,7 +247,9 @@ async function createOTPandStore(username, email) {
     [email, code]
   );
 
-  // No email is sent here; OTP is stored for verification by API call.
+  // Send OTP via Resend API
+  await sendOTPViaResend(email, code);
+
   return code;
 }
 
@@ -221,11 +261,12 @@ export const sendOTP = async (req, res) => {
     }
 
     await createOTPandStore(username, email);
-    return res.json({ message: "OTP recorded" });
+    return res.json({ message: "OTP sent to email successfully" });
   } catch (err) {
     console.error(err);
     if (err.status === 404) return res.status(404).json({ error: err.message });
-    return res.status(500).json({ error: "Something went wrong" });
+    if (err.message === 'Email service not configured') return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: "Failed to send OTP" });
   }
 };
 
@@ -237,11 +278,12 @@ export const resendOTP = async (req, res) => {
     }
 
     await createOTPandStore(username, email);
-    return res.json({ message: "OTP resent (stored)" });
+    return res.json({ message: "OTP resent to email successfully" });
   } catch (err) {
     console.error(err);
     if (err.status === 404) return res.status(404).json({ error: err.message });
-    return res.status(500).json({ error: "Something went wrong" });
+    if (err.message === 'Email service not configured') return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: "Failed to resend OTP" });
   }
 };
 
