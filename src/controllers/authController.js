@@ -1,5 +1,6 @@
 // controllers/authController.js
 import { db } from "../config/db.js";
+import { generateOTP } from "../utils/generateOTP.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
@@ -185,5 +186,132 @@ export const signup = async (req, res) => {
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: err.message });
+  }
+};
+
+async function createOTPandStore(username, email) {
+  const [users] = await db.query(
+    "SELECT user_id FROM users WHERE username = ? AND email = ?",
+    [username, email]
+  );
+
+  if (users.length === 0) {
+    const err = new Error("User not found with provided username and email");
+    err.status = 404;
+    throw err;
+  }
+
+  const code = generateOTP();
+
+  await db.query(
+    `INSERT INTO password_otps (email, code, expires_at, created_at)
+     VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 5 MINUTE), NOW())`,
+    [email, code]
+  );
+
+  // No email is sent here; OTP is stored for verification by API call.
+  return code;
+}
+
+export const sendOTP = async (req, res) => {
+  try {
+    const { username, email } = req.body;
+    if (!username || !email) {
+      return res.status(400).json({ error: "Username and email are required" });
+    }
+
+    await createOTPandStore(username, email);
+    return res.json({ message: "OTP recorded" });
+  } catch (err) {
+    console.error(err);
+    if (err.status === 404) return res.status(404).json({ error: err.message });
+    return res.status(500).json({ error: "Something went wrong" });
+  }
+};
+
+export const resendOTP = async (req, res) => {
+  try {
+    const { username, email } = req.body;
+    if (!username || !email) {
+      return res.status(400).json({ error: "Username and email are required" });
+    }
+
+    await createOTPandStore(username, email);
+    return res.json({ message: "OTP resent (stored)" });
+  } catch (err) {
+    console.error(err);
+    if (err.status === 404) return res.status(404).json({ error: err.message });
+    return res.status(500).json({ error: "Something went wrong" });
+  }
+};
+
+export const verifyOTP = async (req, res) => {
+  try {
+    const { username, email, code } = req.body;
+    if (!username || !email || !code) {
+      return res.status(400).json({ error: "Username, email, and OTP code are required" });
+    }
+
+    const [users] = await db.query(
+      "SELECT user_id FROM users WHERE username = ? AND email = ?",
+      [username, email]
+    );
+
+    if (users.length === 0) {
+      return res.status(404).json({ error: "User not found with provided username and email" });
+    }
+
+    const [otps] = await db.query(
+      `SELECT * FROM password_otps WHERE email = ? AND code = ? AND expires_at >= NOW() ORDER BY id DESC LIMIT 1`,
+      [email, code]
+    );
+
+    if (otps.length === 0) {
+      return res.status(400).json({ error: "Invalid or expired OTP" });
+    }
+
+    return res.json({ message: "OTP verified", verified: true });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Something went wrong" });
+  }
+};
+
+export const resetPasswordWithOTP = async (req, res) => {
+  try {
+    const { username, email, code, newPassword } = req.body;
+    if (!username || !email || !code || !newPassword) {
+      return res.status(400).json({ error: "Username, email, OTP code and new password are required" });
+    }
+
+    const [users] = await db.query(
+      "SELECT user_id FROM users WHERE username = ? AND email = ?",
+      [username, email]
+    );
+
+    if (users.length === 0) {
+      return res.status(404).json({ error: "User not found with provided username and email" });
+    }
+
+    const user = users[0];
+
+    const [otps] = await db.query(
+      `SELECT * FROM password_otps WHERE email = ? AND code = ? AND expires_at >= NOW() ORDER BY id DESC LIMIT 1`,
+      [email, code]
+    );
+
+    if (otps.length === 0) {
+      return res.status(400).json({ error: "Invalid or expired OTP" });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await db.query("UPDATE users SET password = ? WHERE user_id = ?", [hashedPassword, user.user_id]);
+
+    await db.query("DELETE FROM password_otps WHERE email = ?", [email]);
+
+    return res.json({ message: "Password updated successfully" });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Something went wrong" });
   }
 };

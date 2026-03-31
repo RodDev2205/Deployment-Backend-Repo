@@ -18,6 +18,16 @@ CREATE TABLE IF NOT EXISTS `password_reset_tokens` (
   CONSTRAINT `fk_pass_reset_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS `password_otps` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `email` VARCHAR(255) NOT NULL,
+  `code` VARCHAR(6) NOT NULL,
+  `expires_at` DATETIME NOT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX (`email`),
+  INDEX (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS `recovery_attempt` (
   `recovery_attempt_id` INT AUTO_INCREMENT PRIMARY KEY,
   `user_id` INT NOT NULL,
