@@ -193,8 +193,10 @@ async function sendOTPViaSendGrid(email, code) {
   const apiKey = process.env.SENDGRID_API_KEY;
   if (!apiKey) {
     console.error('Missing SENDGRID_API_KEY in environment');
-    throw new Error('Email service not configured');
+    throw new Error('Email service not configured - missing SENDGRID_API_KEY');
   }
+
+  console.log('Sending OTP email to:', email, 'with code length:', code.length);
 
   const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
     method: 'POST',
@@ -207,7 +209,7 @@ async function sendOTPViaSendGrid(email, code) {
         to: [{ email: email }]
       }],
       from: {
-        email: 'noreply@yourdomain.com', // Replace with your verified sender
+        email: 'coderabonline@gmail.com', // Replace with your verified sender email
         name: 'POS System'
       },
       subject: 'Your OTP Code',
@@ -231,9 +233,17 @@ async function sendOTPViaSendGrid(email, code) {
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    console.error('SendGrid API error:', error);
-    throw new Error('Failed to send OTP email');
+    let errorMessage = 'Failed to send OTP email';
+    try {
+      const errorData = await response.json();
+      console.error('SendGrid API error response:', errorData);
+      if (errorData.errors && errorData.errors.length > 0) {
+        errorMessage = errorData.errors[0].message || errorMessage;
+      }
+    } catch (parseError) {
+      console.error('Failed to parse SendGrid error response:', await response.text());
+    }
+    throw new Error(errorMessage);
   }
 
   const data = await response.json();
