@@ -189,37 +189,50 @@ export const signup = async (req, res) => {
   }
 };
 
-async function sendOTPViaResend(email, code) {
-  const apiKey = process.env.RESEND_API_KEY;
+async function sendOTPViaSendGrid(email, code) {
+  const apiKey = process.env.SENDGRID_API_KEY;
   if (!apiKey) {
-    console.error('Missing RESEND_API_KEY in environment');
+    console.error('Missing SENDGRID_API_KEY in environment');
     throw new Error('Email service not configured');
   }
 
-  const response = await fetch('https://api.resend.com/emails', {
+  const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      from: 'noreply@resend.dev',
-      to: email,
+      personalizations: [{
+        to: [{ email: email }]
+      }],
+      from: {
+        email: 'noreply@yourdomain.com', // Replace with your verified sender
+        name: 'POS System'
+      },
       subject: 'Your OTP Code',
-      html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px;">
-          <h2>Password Reset OTP</h2>
-          <p>Your OTP code is <strong>${code}</strong></p>
-          <p>This code will expire in 5 minutes.</p>
-          <p>If you didn't request this code, please ignore this email.</p>
-        </div>
-      `
+      content: [{
+        type: 'text/html',
+        value: `
+          <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #333;">Password Reset OTP</h2>
+            <p style="font-size: 16px; line-height: 1.5;">Your OTP code is:</p>
+            <div style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 20px; text-align: center; margin: 20px 0;">
+              <span style="font-size: 24px; font-weight: bold; color: #007bff;">${code}</span>
+            </div>
+            <p style="font-size: 14px; color: #666;">This code will expire in 5 minutes.</p>
+            <p style="font-size: 14px; color: #666;">If you didn't request this code, please ignore this email.</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+            <p style="font-size: 12px; color: #999;">This is an automated message from POS System.</p>
+          </div>
+        `
+      }]
     })
   });
 
   if (!response.ok) {
     const error = await response.json();
-    console.error('Resend API error:', error);
+    console.error('SendGrid API error:', error);
     throw new Error('Failed to send OTP email');
   }
 
@@ -247,8 +260,8 @@ async function createOTPandStore(username, email) {
     [email, code]
   );
 
-  // Send OTP via Resend API
-  await sendOTPViaResend(email, code);
+  // Send OTP via SendGrid API
+  await sendOTPViaSendGrid(email, code);
 
   return code;
 }
