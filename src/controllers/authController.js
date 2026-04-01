@@ -153,8 +153,8 @@ export const login = async (req, res) => {
 
 export const signup = async (req, res) => {
   try {
-    const { full_name, username, password, role_id } = req.body;
-    if (!full_name || !username || !password || !role_id) {
+    const { full_name, username, email, password, role_id } = req.body;
+    if (!full_name || !username || !email || !password || !role_id) {
       return res.status(400).json({ error: "All fields are required" });
     }
     
@@ -168,14 +168,24 @@ export const signup = async (req, res) => {
       return res.status(400).json({ error: "Username already exists" });
     }
 
+    // Check if email already exists
+    const [existingEmail] = await db.query(
+      "SELECT * FROM users WHERE email = ?", 
+      [email]
+    );
+
+    if (existingEmail.length > 0) {
+      return res.status(400).json({ error: "Email already exists" });
+    }
+
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Insert new user
     const [result] = await db.query(
-      `INSERT INTO users (full_name, username, password, role_id, status) 
-       VALUES (?, ?, ?, ?, ?)`,
-      [full_name, username, hashedPassword, 3, "Activate"]
+      `INSERT INTO users (full_name, username, email, password, role_id, status) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [full_name, username, email, hashedPassword, 3, "Activate"]
     );
 
     return res.json({
