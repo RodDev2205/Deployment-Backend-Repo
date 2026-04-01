@@ -197,6 +197,7 @@ async function sendOTPViaSendGrid(email, code) {
   }
 
   console.log('Sending OTP email to:', email, 'with code length:', code.length);
+  const startTime = Date.now();
 
   const requestBody = {
     personalizations: [{
@@ -225,7 +226,7 @@ async function sendOTPViaSendGrid(email, code) {
     }]
   };
 
-  console.log('SendGrid request body:', JSON.stringify(requestBody, null, 2));
+  console.log('SendGrid request body prepared, sending...');
 
   const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
     method: 'POST',
@@ -236,7 +237,8 @@ async function sendOTPViaSendGrid(email, code) {
     body: JSON.stringify(requestBody)
   });
 
-  console.log('SendGrid response status:', response.status);
+  const endTime = Date.now();
+  console.log('SendGrid response status:', response.status, 'Time taken:', endTime - startTime, 'ms');
 
   if (!response.ok) {
     let errorMessage = 'Failed to send OTP email';
