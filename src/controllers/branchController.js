@@ -9,43 +9,97 @@ export const createBranch = async (req, res) => {
       address,
       contact,
       openingTime,
-      closingTime
+      closingTime,
+      locationId
     } = req.body;
 
     if (!branchName || !address || !contact || !openingTime || !closingTime) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    const [result] = await db.query(
-      `
+    const [locationColumn] = await db.query(
+      "SHOW COLUMNS FROM branches LIKE 'location_id'"
+    );
+
+    let insertQuery;
+    let params;
+
+    if (locationColumn.length > 0) {
+      insertQuery = `
+      INSERT INTO branches
+      (branch_name, address, contact_number, opening_time, closing_time, location_id, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      `;
+      params = [
+        branchName,
+        address,
+        contact,
+        openingTime,
+        closingTime,
+        locationId || null,
+        req.user.user_id // comes from JWT
+      ];
+    } else {
+      insertQuery = `
       INSERT INTO branches
       (branch_name, address, contact_number, opening_time, closing_time, created_by)
       VALUES (?, ?, ?, ?, ?, ?)
-      `,
-      [
+      `;
+      params = [
         branchName,
         address,
         contact,
         openingTime,
         closingTime,
         req.user.user_id // comes from JWT
-      ]
-    );
+      ];
+    }
+
+    const [result] = await db.query(insertQuery, params);
 
     res.status(201).json({
       message: "Branch created successfully",
-      branchId: result.insertId
+      branchId: result.insertId,
+      branch: {
+        branch_id: result.insertId,
+        name: branchName,
+        address,
+        contact,
+        openingTime,
+        closingTime,
+        locationId: locationId || null
+      }
     });
 
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server error" });
   }
-}; 
+};
+
+export const getBranchLocations = async (req, res) => {
+  try {
+    const [locations] = await db.query(
+      `SELECT location_id, country, city, province, street, postal_code FROM locations ORDER BY country ASC, city ASC, province ASC, street ASC`
+    );
+
+    res.status(200).json({ locations });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to fetch locations" });
+  }
+};
 
 export const getBranches = async (req, res) => {
   try {
-    const [branches] = await db.query(`
+    const [locationColumn] = await db.query(
+      "SHOW COLUMNS FROM branches LIKE 'location_id'"
+    );
+
+    const hasLocationId = locationColumn.length > 0;
+
+    const query = hasLocationId
+      ? `
       SELECT 
         b.branch_id, 
         b.branch_name AS name,
@@ -53,11 +107,31 @@ export const getBranches = async (req, res) => {
         b.contact_number AS contact,
         b.opening_time AS openingTime,
         b.closing_time AS closingTime,
+        b.status,
+        b.location_id AS locationId,
+        CONCAT_WS(', ', l.street, l.city, l.province, l.country, l.postal_code) AS locationText,
+        u.username AS createdBy
+      FROM branches b
+      LEFT JOIN locations l ON b.location_id = l.location_id
+      LEFT JOIN users u ON b.created_by = u.user_id
+      ORDER BY b.created_by DESC
+    `
+      : `
+      SELECT 
+        b.branch_id, 
+        b.branch_name AS name,
+        b.address, 
+        b.contact_number AS contact,
+        b.opening_time AS openingTime,
+        b.closing_time AS closingTime,
+        b.status,
         u.username AS createdBy
       FROM branches b
       LEFT JOIN users u ON b.created_by = u.user_id
       ORDER BY b.created_by DESC
-    `);
+    `;
+
+    const [branches] = await db.query(query);
 
     res.status(200).json({ branches });
   } catch (error) {
