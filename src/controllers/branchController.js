@@ -119,7 +119,7 @@ export const getBranches = async (req, res) => {
         b.closing_time AS closingTime,
         b.status,
         b.location_id AS locationId,
-        b.contact_person_id AS contactPersonId,
+        b.contact_user_id AS contactPersonId,
         CONCAT_WS(', ', l.street, l.city, l.province, l.country, l.postal_code) AS locationText,
         u.username AS createdBy,
         cp.user_id AS contactPersonUserId,
@@ -130,7 +130,7 @@ export const getBranches = async (req, res) => {
       FROM branches b
       LEFT JOIN locations l ON b.location_id = l.location_id
       LEFT JOIN users u ON b.created_by = u.user_id
-      LEFT JOIN users cp ON b.contact_person_id = cp.user_id
+      LEFT JOIN users cp ON b.contact_user_id = cp.user_id
       ORDER BY b.created_by DESC
     `
       : `
@@ -141,7 +141,7 @@ export const getBranches = async (req, res) => {
         b.opening_time AS openingTime,
         b.closing_time AS closingTime,
         b.status,
-        b.contact_person_id AS contactPersonId,
+        b.contact_user_id AS contactPersonId,
         u.username AS createdBy,
         cp.user_id AS contactPersonUserId,
         cp.first_name AS contactPersonFirstName,
@@ -150,7 +150,7 @@ export const getBranches = async (req, res) => {
         cp.contact_number AS contactPersonContactNumber
       FROM branches b
       LEFT JOIN users u ON b.created_by = u.user_id
-      LEFT JOIN users cp ON b.contact_person_id = cp.user_id
+      LEFT JOIN users cp ON b.contact_user_id = cp.user_id
       ORDER BY b.created_by DESC
     `;
 
@@ -206,7 +206,7 @@ export const updateBranch = async (req, res) => {
         opening_time = ?,
         closing_time = ?,
         location_id = ?,
-        contact_person_id = ?
+        contact_user_id = ?
        WHERE branch_id = ?`,
       [branchName, openingTime, closingTime, locationId, contactPersonId || null, id]
     );
