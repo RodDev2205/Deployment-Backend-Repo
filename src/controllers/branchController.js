@@ -75,6 +75,35 @@ export const getBranchLocations = async (req, res) => {
   }
 };
 
+export const createLocation = async (req, res) => {
+  try {
+    const { country, city, province, street, postal_code } = req.body;
+
+    if (!country || !city || !province || !street || !postal_code) {
+      return res.status(400).json({ message: "All location fields are required." });
+    }
+
+    const [result] = await db.query(
+      `INSERT INTO locations (country, city, province, street, postal_code) VALUES (?, ?, ?, ?, ?)`,
+      [country.trim(), city.trim(), province.trim(), street.trim(), postal_code.trim()]
+    );
+
+    const newLocation = {
+      location_id: result.insertId,
+      country: country.trim(),
+      city: city.trim(),
+      province: province.trim(),
+      street: street.trim(),
+      postal_code: postal_code.trim(),
+    };
+
+    res.status(201).json({ message: "Location added successfully", location: newLocation });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to create location" });
+  }
+};
+
 export const getBranches = async (req, res) => {
   try {
     const [locationColumn] = await db.query(
