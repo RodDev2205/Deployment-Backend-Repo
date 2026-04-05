@@ -104,7 +104,7 @@ export const getCurrentUser = async (req, res) => {
     const userId = req.user.user_id;
     const [rows] = await db.query(
       `
-      SELECT u.user_id, u.first_name, u.last_name, u.username, u.contact_number, u.role_id, r.role_name,
+      SELECT u.user_id, u.first_name, u.last_name, u.username, u.email, u.contact_number, u.role_id, r.role_name,
              u.branch_id, u.status, u.created_at
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.role_id
