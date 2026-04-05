@@ -138,11 +138,15 @@ export const login = async (req, res) => {
       token,
       user_id: user.user_id,
       username: user.username,
+      first_name: user.first_name,
+      last_name: user.last_name,
       full_name: user.full_name,
+      email: user.email,
       role_id: user.role_id,
       role_name: user.role_name || null,
       branch_id: user.branch_id,
-      status: user.status
+      status: user.status,
+      created_at: user.created_at
     });
 
   } catch (err) {

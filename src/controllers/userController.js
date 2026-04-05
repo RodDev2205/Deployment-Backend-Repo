@@ -101,25 +101,56 @@ export const getUser = async (req, res) => {
 
 export const getCurrentUser = async (req, res) => {
   try {
-    const userId = req.user.user_id;
-    console.log('getCurrentUser called with user_id:', userId);
+    const userId = req.user?.user_id;
+    const username = req.user?.username;
+    console.log('getCurrentUser called with user_id:', userId, 'username:', username);
     console.log('req.user object:', req.user);
 
-    const [rows] = await db.query(
-      `
+    let query = `
       SELECT u.user_id, u.first_name, u.last_name, u.username, u.email, u.contact_number, u.role_id, r.role_name,
              u.branch_id, u.status, u.created_at
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.role_id
       WHERE u.user_id = ?
-      `,
-      [userId]
-    );
+      `;
+    let params = [userId];
+
+    if (!userId && username) {
+      query = `
+        SELECT u.user_id, u.first_name, u.last_name, u.username, u.email, u.contact_number, u.role_id, r.role_name,
+               u.branch_id, u.status, u.created_at
+        FROM users u
+        LEFT JOIN roles r ON u.role_id = r.role_id
+        WHERE u.username = ?
+      `;
+      params = [username];
+    }
+
+    const [rows] = await db.query(query, params);
+
+    if (rows.length === 0 && username && userId) {
+      // fallback to username if user_id fails for some reason
+      console.log('Fallback search by username because user_id query returned no rows');
+      const [fallbackRows] = await db.query(
+        `
+          SELECT u.user_id, u.first_name, u.last_name, u.username, u.email, u.contact_number, u.role_id, r.role_name,
+                 u.branch_id, u.status, u.created_at
+          FROM users u
+          LEFT JOIN roles r ON u.role_id = r.role_id
+          WHERE u.username = ?
+        `,
+        [username]
+      );
+      if (fallbackRows.length > 0) {
+        console.log('Returning fallback user data by username:', fallbackRows[0]);
+        return res.json(fallbackRows[0]);
+      }
+    }
 
     console.log('Query result rows count:', rows.length);
 
     if (rows.length === 0) {
-      console.log('No user found with user_id:', userId);
+      console.log('No user found with user_id:', userId, 'or username:', username);
       return res.status(404).json({ error: 'User not found' });
     }
 
