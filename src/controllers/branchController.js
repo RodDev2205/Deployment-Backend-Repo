@@ -1,18 +1,15 @@
 import { db } from "../config/db.js";
 
 export const createBranch = async (req, res) => {
-      console.log("DEBUG: req.user =", req.user); // 🔥 Add this line
-
   try {
     const {
       branchName,
-      contact,
       openingTime,
       closingTime,
       locationId
     } = req.body;
 
-    if (!branchName || !contact || !openingTime || !closingTime || !locationId) {
+    if (!branchName || !openingTime || !closingTime || !locationId) {
       return res.status(400).json({ message: "All fields are required, including location" });
     }
 
@@ -27,13 +24,12 @@ export const createBranch = async (req, res) => {
       const address = "";
       insertQuery = `
       INSERT INTO branches
-      (branch_name, address, contact_number, opening_time, closing_time, location_id, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      (branch_name, address, opening_time, closing_time, location_id, created_by)
+      VALUES (?, ?, ?, ?, ?, ?)
       `;
       params = [
         branchName,
         address,
-        contact,
         openingTime,
         closingTime,
         locationId,
@@ -51,7 +47,6 @@ export const createBranch = async (req, res) => {
       branch: {
         branch_id: result.insertId,
         name: branchName,
-        contact,
         openingTime,
         closingTime,
         locationId: locationId
@@ -120,16 +115,22 @@ export const getBranches = async (req, res) => {
         b.branch_id, 
         b.branch_name AS name,
         b.address, 
-        b.contact_number AS contact,
         b.opening_time AS openingTime,
         b.closing_time AS closingTime,
         b.status,
         b.location_id AS locationId,
+        b.contact_person_id AS contactPersonId,
         CONCAT_WS(', ', l.street, l.city, l.province, l.country, l.postal_code) AS locationText,
-        u.username AS createdBy
+        u.username AS createdBy,
+        cp.user_id AS contactPersonUserId,
+        cp.first_name AS contactPersonFirstName,
+        cp.last_name AS contactPersonLastName,
+        cp.username AS contactPersonUsername,
+        cp.contact_number AS contactPersonContactNumber
       FROM branches b
       LEFT JOIN locations l ON b.location_id = l.location_id
       LEFT JOIN users u ON b.created_by = u.user_id
+      LEFT JOIN users cp ON b.contact_person_id = cp.user_id
       ORDER BY b.created_by DESC
     `
       : `
@@ -137,13 +138,19 @@ export const getBranches = async (req, res) => {
         b.branch_id, 
         b.branch_name AS name,
         b.address, 
-        b.contact_number AS contact,
         b.opening_time AS openingTime,
         b.closing_time AS closingTime,
         b.status,
-        u.username AS createdBy
+        b.contact_person_id AS contactPersonId,
+        u.username AS createdBy,
+        cp.user_id AS contactPersonUserId,
+        cp.first_name AS contactPersonFirstName,
+        cp.last_name AS contactPersonLastName,
+        cp.username AS contactPersonUsername,
+        cp.contact_number AS contactPersonContactNumber
       FROM branches b
       LEFT JOIN users u ON b.created_by = u.user_id
+      LEFT JOIN users cp ON b.contact_person_id = cp.user_id
       ORDER BY b.created_by DESC
     `;
 
@@ -172,13 +179,13 @@ export const updateBranch = async (req, res) => {
     const { id } = req.params;
     const {
       branchName,
-      contact,
       openingTime,
       closingTime,
-      locationId
+      locationId,
+      contactPersonId
     } = req.body;
 
-    if (!branchName || !contact || !openingTime || !closingTime || !locationId) {
+    if (!branchName || !openingTime || !closingTime || !locationId) {
       return res.status(400).json({ message: "All fields are required, including location" });
     }
 
@@ -196,12 +203,12 @@ export const updateBranch = async (req, res) => {
     await db.query(
       `UPDATE branches SET
         branch_name = ?,
-        contact_number = ?,
         opening_time = ?,
         closing_time = ?,
-        location_id = ?
+        location_id = ?,
+        contact_person_id = ?
        WHERE branch_id = ?`,
-      [branchName, contact, openingTime, closingTime, locationId, id]
+      [branchName, openingTime, closingTime, locationId, contactPersonId || null, id]
     );
 
     res.status(200).json({
@@ -209,13 +216,43 @@ export const updateBranch = async (req, res) => {
       branch: {
         branch_id: id,
         name: branchName,
-        contact,
         openingTime,
         closingTime,
-        locationId
+        locationId,
+        contactPersonId
       }
     });
 
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const getBranchAdmins = async (req, res) => {
+  try {
+    const { branchId } = req.params;
+
+    if (!branchId) {
+      return res.status(400).json({ message: "Branch ID is required" });
+    }
+
+    // Get all admins (role_id = 2) for the specific branch
+    const [admins] = await db.query(
+      `SELECT 
+        u.user_id,
+        u.first_name,
+        u.last_name,
+        u.username,
+        u.contact_number,
+        u.status
+      FROM users u
+      WHERE u.branch_id = ? AND u.role_id = 2 AND u.status = 'Activate'
+      ORDER BY u.first_name ASC, u.last_name ASC`,
+      [branchId]
+    );
+
+    res.status(200).json({ admins });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server error" });
