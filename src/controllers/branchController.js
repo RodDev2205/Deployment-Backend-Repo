@@ -24,13 +24,15 @@ export const createBranch = async (req, res) => {
     let params;
 
     if (locationColumn.length > 0) {
+      const address = "";
       insertQuery = `
       INSERT INTO branches
-      (branch_name, contact_number, opening_time, closing_time, location_id, created_by)
-      VALUES (?, ?, ?, ?, ?, ?)
+      (branch_name, address, contact_number, opening_time, closing_time, location_id, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
       `;
       params = [
         branchName,
+        address,
         contact,
         openingTime,
         closingTime,
