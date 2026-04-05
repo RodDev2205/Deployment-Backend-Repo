@@ -153,8 +153,13 @@ export const login = async (req, res) => {
 
 export const signup = async (req, res) => {
   try {
-    const { full_name, username, email, password, role_id } = req.body;
-    if (!full_name || !username || !email || !password || !role_id) {
+    const { first_name, last_name, username, email, password, role_id } = req.body;
+    
+    console.log('Signup request body:', req.body);
+    console.log('Destructured values:', { first_name, last_name, username, email, password, role_id });
+    
+    if (!first_name || !last_name || !username || !email || !password || !role_id) {
+      console.log('Validation failed - missing fields');
       return res.status(400).json({ error: "All fields are required" });
     }
     
@@ -183,9 +188,9 @@ export const signup = async (req, res) => {
 
     // Insert new user
     const [result] = await db.query(
-      `INSERT INTO users (full_name, username, email, password, role_id, status) 
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [full_name, username, email, hashedPassword, 3, "Activate"]
+      `INSERT INTO users (first_name, last_name, username, email, password, role_id, status) 
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [first_name, last_name, username, email, hashedPassword, 3, "Activate"]
     );
 
     return res.json({
