@@ -7,11 +7,22 @@ export const updateUser = async (req, res) => {
     const userId = req.params.id;
     const { first_name, last_name, username, password, branch_id, contact_number } = req.body;
 
-    if (!first_name || !last_name || !username || !branch_id) {
+    if (!first_name || !last_name || !username) {
       return res.status(400).json({
-        error: "First name, last name, username, and branch are required",
+        error: "First name, last name, and username are required",
       });
     }
+
+    const [currentRows] = await db.query(
+      "SELECT branch_id FROM users WHERE user_id = ?",
+      [userId]
+    );
+
+    if (currentRows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const finalBranchId = branch_id || currentRows[0].branch_id;
 
     // ✅ Check if username already taken by another user
     const [existing] = await db.query(
@@ -31,21 +42,21 @@ export const updateUser = async (req, res) => {
     let sql;
     let params;
 
-    // always update first_name, last_name, username, branch_id
+    // always update first_name, last_name, username, branch_id, contact_number
     if (hashedPassword) {
       sql = `
         UPDATE users 
         SET first_name = ?, last_name = ?, username = ?, password = ?, branch_id = ?, contact_number = ?
         WHERE user_id = ?
       `;
-      params = [first_name, last_name, username, hashedPassword, branch_id, contact_number || null, userId];
+      params = [first_name, last_name, username, hashedPassword, finalBranchId, contact_number || null, userId];
     } else {
       sql = `
         UPDATE users 
         SET first_name = ?, last_name = ?, username = ?, branch_id = ?, contact_number = ?
         WHERE user_id = ?
       `;
-      params = [first_name, last_name, username, branch_id, contact_number || null, userId];
+      params = [first_name, last_name, username, finalBranchId, contact_number || null, userId];
     }
 
     const [result] = await db.query(sql, params);
