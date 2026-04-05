@@ -102,6 +102,9 @@ export const getUser = async (req, res) => {
 export const getCurrentUser = async (req, res) => {
   try {
     const userId = req.user.user_id;
+    console.log('getCurrentUser called with user_id:', userId);
+    console.log('req.user object:', req.user);
+
     const [rows] = await db.query(
       `
       SELECT u.user_id, u.first_name, u.last_name, u.username, u.email, u.contact_number, u.role_id, r.role_name,
@@ -112,9 +115,15 @@ export const getCurrentUser = async (req, res) => {
       `,
       [userId]
     );
+
+    console.log('Query result rows count:', rows.length);
+
     if (rows.length === 0) {
+      console.log('No user found with user_id:', userId);
       return res.status(404).json({ error: 'User not found' });
     }
+
+    console.log('Returning user data:', rows[0]);
     res.json(rows[0]);
   } catch (err) {
     console.error('getCurrentUser error', err);
