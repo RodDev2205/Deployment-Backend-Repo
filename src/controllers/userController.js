@@ -5,7 +5,7 @@ import { io } from "../../server.js"; // realtime notification
 export const updateUser = async (req, res) => {
   try {
     const userId = req.params.id;
-    const { first_name, last_name, username, password, branch_id, contact_number } = req.body;
+    const { first_name, last_name, username, password, branch_id, contact_number, old_password } = req.body;
 
     if (!first_name || !last_name || !username) {
       return res.status(400).json({
@@ -36,6 +36,18 @@ export const updateUser = async (req, res) => {
 
     let hashedPassword = null;
     if (password) {
+      if (!old_password) {
+        return res.status(400).json({ error: "Old password is required to change password" });
+      }
+      // Get current password for verification
+      const [currentUser] = await db.query("SELECT password FROM users WHERE user_id = ?", [userId]);
+      if (currentUser.length === 0) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      const match = await bcrypt.compare(old_password, currentUser[0].password);
+      if (!match) {
+        return res.status(400).json({ error: "Old password is incorrect" });
+      }
       hashedPassword = await bcrypt.hash(password, 10);
     }
 
