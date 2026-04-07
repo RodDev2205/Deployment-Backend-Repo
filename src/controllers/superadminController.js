@@ -296,13 +296,14 @@ export const updateSuperAdminProfile = async (req, res) => {
       return res.status(404).json({ error: "SuperAdmin not found or unauthorized" });
     }
 
-    // Return updated user data
+    // Return updated user data, including email
     const [updatedUser] = await db.query(
       `SELECT
         u.user_id,
         u.first_name,
         u.last_name,
         u.username,
+        u.email,
         u.contact_number,
         u.role_id,
         r.role_name,
