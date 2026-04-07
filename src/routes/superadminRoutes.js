@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getAdmin, toggleUserStatus, getAllStaff } from "../controllers/superadminController.js";
+import { getAdmin, toggleUserStatus, getAllStaff, updateSuperAdminProfile } from "../controllers/superadminController.js";
 import { getCashiers } from "../controllers/superadminController.js";
 import { createAdmin } from "../controllers/superadminController.js";
 import { getStaffByBranch } from "../controllers/superadminController.js";
@@ -15,6 +15,7 @@ router.post("/createAdmin", verifyToken, requireRole(3), createAdmin);
 router.post("/createCashier", verifyToken, requireRole(3), createCashier);
 router.get("/staff", verifyToken, requireRole(3), getAllStaff);
 router.get("/:branch_id/staff", verifyToken, requireRole(3), getStaffByBranch);
+router.put("/profile", verifyToken, requireRole(3), updateSuperAdminProfile);
 
 
 export default router;
