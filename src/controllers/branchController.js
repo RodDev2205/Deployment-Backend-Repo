@@ -6,7 +6,8 @@ export const createBranch = async (req, res) => {
       branchName,
       openingTime,
       closingTime,
-      locationId
+      locationId,
+      address = ""
     } = req.body;
 
     if (!branchName || !openingTime || !closingTime || !locationId) {
@@ -21,14 +22,14 @@ export const createBranch = async (req, res) => {
     let params;
 
     if (locationColumn.length > 0) {
-      const address = "";
       insertQuery = `
       INSERT INTO branches
-      (branch_name, opening_time, closing_time, location_id, created_by)
-      VALUES (?, ?, ?, ?, ?)
+      (branch_name, address, opening_time, closing_time, location_id, created_by)
+      VALUES (?, ?, ?, ?, ?, ?)
       `;
       params = [
         branchName,
+        address || "",
         openingTime,
         closingTime,
         locationId,
