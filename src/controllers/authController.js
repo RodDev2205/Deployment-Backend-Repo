@@ -44,9 +44,12 @@ export const login = async (req, res) => {
       .split(',')[0]
       .trim();
 
-    // STEP 1: Check if user exists
+    // STEP 1: Check if user exists and get branch status
     const [rows] = await db.query(
-      "SELECT * FROM users WHERE username = ?", 
+      `SELECT u.*, b.status as branch_status, b.branch_name
+       FROM users u
+       LEFT JOIN branches b ON u.branch_id = b.branch_id
+       WHERE u.username = ?`, 
       [username]
     );
 
@@ -78,7 +81,23 @@ export const login = async (req, res) => {
       return res.status(400).json({ error: "Invalid username or password" });
     }
 
-    // STEP 3: Check if account is deactivated
+    // STEP 3: Check if branch is deactivated (only for non-superadmin users)
+    if (user.role_id !== 3 && user.branch_status === 'deactivate') {
+      await logLoginActivity({
+        userId: user.user_id,
+        branchId: user.branch_id,
+        username,
+        status: "FAILED",
+        reason: "Branch deactivated",
+        ipAddress
+      });
+      return res.status(403).json({ 
+        error: "Branch Deactivated",
+        message: `Your branch "${user.branch_name}" is currently deactivated.\nPlease contact the Super Admin for assistance.`
+      });
+    }
+
+    // STEP 4: Check if account is deactivated
     if (user.status !== 'Activate') {
       await logLoginActivity({
         userId: user.user_id,
