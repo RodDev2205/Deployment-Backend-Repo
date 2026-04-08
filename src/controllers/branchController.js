@@ -24,12 +24,11 @@ export const createBranch = async (req, res) => {
       const address = "";
       insertQuery = `
       INSERT INTO branches
-      (branch_name, address, opening_time, closing_time, location_id, created_by)
-      VALUES (?, ?, ?, ?, ?, ?)
+      (branch_name, opening_time, closing_time, location_id, created_by)
+      VALUES (?, ?, ?, ?, ?)
       `;
       params = [
         branchName,
-        address,
         openingTime,
         closingTime,
         locationId,
