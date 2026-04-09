@@ -73,10 +73,9 @@ export async function getSalesTrend(req, res) {
     const sql = `
       SELECT
         ${groupExpr} AS period_key,
-        COALESCE(SUM(ti.quantity * ti.price), 0) AS total_sales,
+        COALESCE(SUM(t.total_amount), 0) AS total_sales,
         COUNT(DISTINCT t.transaction_id) AS transaction_count
       FROM transactions t
-      LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id
       WHERE ${where}
       GROUP BY ${groupExpr}
       ORDER BY ${groupExpr} ASC

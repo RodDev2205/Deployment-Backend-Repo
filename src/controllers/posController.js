@@ -1,5 +1,5 @@
 import { db } from "../config/db.js";
-import { io } from "../../server.js"; // used to notify realtime updates
+// import { io } from "../../server.js"; // moved to dynamic import to avoid circular dependency
 
 // NOTE: Ensure your database schema includes an `order_type` column in transactions,
 // e.g.:
@@ -132,6 +132,22 @@ export const completeSale = async (req, res) => {
     }
 
     // ==================== STEP 3: Calculate totals ====================
+    // Get tax rate for the branch
+    const [[taxRow]] = await connection.query(
+      'SELECT tax_rate FROM branch_tax WHERE branch_id = ?',
+      [user.branch_id]
+    );
+
+    if (!taxRow) {
+      await connection.rollback();
+      return res.status(400).json({
+        success: false,
+        message: `Tax rate not configured for branch ${user.branch_id}`,
+      });
+    }
+
+    const taxRate = Number(taxRow.tax_rate);
+
     const discountObj = discount || { type: "none", value: 0 };
     let discountAmount = 0;
 
@@ -141,7 +157,11 @@ export const completeSale = async (req, res) => {
       discountAmount = discountObj.value;
     }
 
-    const totalAmount = subtotal - discountAmount;
+    // Calculate tax on discounted subtotal
+    const taxableAmount = subtotal - discountAmount;
+    const taxAmount = Math.round((taxableAmount * (taxRate / 100)) * 100) / 100; // Round to 2 decimal places
+
+    const totalAmount = taxableAmount + taxAmount;
     const changeAmount = Number(amountPaid) - totalAmount;
 
     if (changeAmount < 0) {
@@ -188,15 +208,19 @@ export const completeSale = async (req, res) => {
     const transactionNumber = generateTransactionNumber();
 
     const [transactionResult] = await connection.query(
-      `INSERT INTO transactions 
-       (transaction_number, subtotal, discount_type, discount_value, discount_amount, total_amount, payment_method, amount_paid, change_amount, cashier_id, branch_id, status, order_type)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO transactions
+       (transaction_number, subtotal, discount_type, discount_value, discount_amount,
+        tax_rate, tax_amount, total_amount, payment_method, amount_paid, change_amount,
+        cashier_id, branch_id, status, order_type)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         transactionNumber,
         subtotal,
         discountObj.type || "none",
         discountObj.value || 0,
         discountAmount,
+        taxRate,
+        taxAmount,
         totalAmount,
         paymentMethod,
         amountPaid,
@@ -233,6 +257,8 @@ export const completeSale = async (req, res) => {
       referenceId: transactionId
     });
 
+    // Dynamic import to avoid circular dependency
+    const { io } = await import("../../server.js");
     io.to(`branch_${user.branch_id}`).emit('dashboardUpdate', { branch_id: user.branch_id });
     io.emit('dashboardUpdate', { branch_id: user.branch_id });
 
@@ -248,6 +274,134 @@ export const completeSale = async (req, res) => {
     await connection.rollback();
     console.error("POS Error:", error);
     res.status(500).json({ success: false, message: "Server error: " + error.message });
+  } finally {
+    connection.release();
+  }
+};
+
+/**
+ * Creates a new transaction with proper tax calculation
+ * @param {number} branchId - The branch ID for tax calculation
+ * @param {Array} items - Array of items [{product_id, price, quantity}]
+ * @param {Object} options - Additional options
+ * @param {string} options.paymentMethod - Payment method
+ * @param {number} options.amountPaid - Amount paid by customer
+ * @param {number} options.cashierId - Cashier user ID
+ * @param {string} options.orderType - Order type ('dine-in' or 'takeout')
+ * @param {Object} options.discount - Discount object {type: 'percentage'|'fixed', value: number}
+ * @returns {Object} Transaction details
+ */
+export const createTransaction = async (branchId, items, options = {}) => {
+  if (!branchId || !items || items.length === 0) {
+    throw new Error('Branch ID and items array are required');
+  }
+
+  const connection = await db.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    // Get tax rate for the branch
+    const [[taxRow]] = await connection.query(
+      'SELECT tax_rate FROM branch_tax WHERE branch_id = ?',
+      [branchId]
+    );
+
+    if (!taxRow) {
+      throw new Error(`Tax rate not found for branch ${branchId}`);
+    }
+
+    const taxRate = Number(taxRow.tax_rate);
+
+    // Calculate subtotal
+    let subtotal = 0;
+    for (const item of items) {
+      if (!item.product_id || !item.price || !item.quantity) {
+        throw new Error('Each item must have product_id, price, and quantity');
+      }
+      subtotal += Number(item.price) * Number(item.quantity);
+    }
+
+    // Calculate discount if provided
+    const discount = options.discount || { type: 'none', value: 0 };
+    let discountAmount = 0;
+    if (discount.type === 'percentage') {
+      discountAmount = (subtotal * discount.value) / 100;
+    } else if (discount.type === 'fixed') {
+      discountAmount = discount.value;
+    }
+
+    // Calculate tax on discounted subtotal
+    const taxableAmount = subtotal - discountAmount;
+    const taxAmount = Math.round((taxableAmount * (taxRate / 100)) * 100) / 100; // Round to 2 decimal places
+
+    // Calculate total
+    const totalAmount = taxableAmount + taxAmount;
+
+    // Generate transaction number
+    const transactionNumber = generateTransactionNumber();
+
+    // Insert transaction
+    const [transactionResult] = await connection.query(
+      `INSERT INTO transactions
+       (transaction_number, subtotal, discount_type, discount_value, discount_amount,
+        tax_rate, tax_amount, total_amount, payment_method, amount_paid, change_amount,
+        cashier_id, branch_id, status, order_type, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+      [
+        transactionNumber,
+        subtotal,
+        discount.type || 'none',
+        discount.value || 0,
+        discountAmount,
+        taxRate,
+        taxAmount,
+        totalAmount,
+        options.paymentMethod || 'cash',
+        options.amountPaid || totalAmount,
+        (options.amountPaid || totalAmount) - totalAmount,
+        options.cashierId || null,
+        branchId,
+        'Completed',
+        options.orderType || 'dine-in'
+      ]
+    );
+
+    const transactionId = transactionResult.insertId;
+
+    // Insert transaction items
+    for (const item of items) {
+      await connection.query(
+        `INSERT INTO transaction_items
+         (transaction_id, menu_id, quantity, price, total, voided_quantity)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          transactionId,
+          item.product_id,
+          item.quantity,
+          item.price,
+          Number(item.price) * Number(item.quantity),
+          0
+        ]
+      );
+    }
+
+    await connection.commit();
+
+    return {
+      transactionId,
+      transactionNumber,
+      subtotal,
+      discountAmount,
+      taxRate,
+      taxAmount,
+      totalAmount,
+      items: items.length
+    };
+
+  } catch (error) {
+    await connection.rollback();
+    throw error;
   } finally {
     connection.release();
   }
@@ -486,7 +640,8 @@ export const voidTransaction = async (req, res) => {
       referenceId: transaction_id
     });
 
-    // Emit dashboard updates
+    // Emit dashboard updates - dynamic import to avoid circular dependency
+    const { io } = await import("../../server.js");
     io.to(`branch_${user.branch_id}`).emit('dashboardUpdate', { branch_id: user.branch_id });
     io.emit('dashboardUpdate', { branch_id: user.branch_id });
 

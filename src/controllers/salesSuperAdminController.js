@@ -57,10 +57,9 @@ export async function getKpis(req, res) {
 
     // 1) Total sales (filtered by branch if selected) - NET SALES (only completed)
     const [totalRows] = await db.execute(
-      `SELECT COALESCE(SUM(ti.quantity * ti.price), 0) AS total_sales 
-       FROM transactions t 
-       LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id 
-       WHERE ${whereClause.replace('status = \'Completed\' AND created_at BETWEEN ? AND ?', 't.status = \'Completed\' AND t.created_at BETWEEN ? AND ?')}`,
+      `SELECT COALESCE(SUM(t.total_amount), 0) AS total_sales
+       FROM transactions t
+       WHERE ${whereClause}`,
       params
     );
 
@@ -73,18 +72,17 @@ export async function getKpis(req, res) {
       : [startSql, endSql];
 
     const [grossRows] = await db.execute(
-      `SELECT COALESCE(SUM((ti.quantity + ti.voided_quantity) * ti.price), 0) AS gross_sales 
-       FROM transactions t 
-       LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id 
+      `SELECT COALESCE(SUM(t.total_amount), 0) AS gross_sales
+       FROM transactions t
        WHERE ${grossWhereClause}`,
       grossParams
     );
 
     // 1.6) Voided sales (filtered by branch/date if selected) - VALUE OF VOIDED PORTIONS
     const [voidedRows] = await db.execute(
-      `SELECT COALESCE(SUM(ti.voided_quantity * ti.price), 0) AS voided_sales 
-       FROM transactions t 
-       LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id 
+      `SELECT COALESCE(SUM(ti.voided_quantity * ti.price), 0) AS voided_sales
+       FROM transactions t
+       LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id
        WHERE ${grossWhereClause}`,
       grossParams
     );
@@ -218,6 +216,7 @@ export default {
   getKpis,
   getBranches,
   getVoidTransactions,
+  getSalesReport,
 };
 
 export async function getBranches(req, res) {
@@ -310,5 +309,48 @@ export async function getTopMenuSalesByBranch(req, res) {
   } catch (err) {
     console.error('getTopMenuSalesByBranch error', err);
     return res.status(500).json({ message: 'Failed to fetch top menu sales', error: err.message });
+  }
+}
+
+/**
+ * Sample sales report query as requested
+ * Returns subtotal, tax_amount, and total_amount sums for a branch
+ */
+export async function getSalesReport(req, res) {
+  try {
+    const { branchId } = req.query;
+
+    if (!branchId) {
+      return res.status(400).json({ message: 'branchId query parameter is required' });
+    }
+
+    const [rows] = await db.execute(
+      `SELECT
+        SUM(subtotal) AS total_subtotal,
+        SUM(tax_amount) AS total_tax_amount,
+        SUM(total_amount) AS total_amount,
+        COUNT(*) AS transaction_count
+       FROM transactions
+       WHERE branch_id = ? AND status = 'Completed'`,
+      [branchId]
+    );
+
+    const result = rows[0] || {
+      total_subtotal: 0,
+      total_tax_amount: 0,
+      total_amount: 0,
+      transaction_count: 0
+    };
+
+    // Ensure numeric values
+    result.total_subtotal = Number(result.total_subtotal || 0);
+    result.total_tax_amount = Number(result.total_tax_amount || 0);
+    result.total_amount = Number(result.total_amount || 0);
+    result.transaction_count = Number(result.transaction_count || 0);
+
+    return res.json(result);
+  } catch (err) {
+    console.error('getSalesReport error', err);
+    return res.status(500).json({ message: 'Failed to fetch sales report', error: err.message });
   }
 }
