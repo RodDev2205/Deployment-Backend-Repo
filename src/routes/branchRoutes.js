@@ -25,15 +25,15 @@ router.patch(
   toggleBranchStatus
 );
 
-// Tax rate management - SuperAdmin only
-router.get("/:branchId/tax-rate", verifyToken, requireRole(3), getBranchTaxRate);
-router.put("/:branchId/tax-rate", verifyToken, requireRole(3), updateBranchTaxRate);
-
 // Get branches with tax rates for tax management
-router.get("/getBranchesWithTax", verifyToken, requireRole(3), getBranchesWithTax);
+router.get('/getBranchesWithTax', verifyToken, requireRole(3), getBranchesWithTax);
 
 // Get current user's branch tax rate (for POS display)
-router.get("/current/tax-rate", verifyToken, getCurrentBranchTaxRate);
+router.get('/current/tax-rate', verifyToken, getCurrentBranchTaxRate);
+
+// Tax rate management - SuperAdmin only
+router.get('/:branchId/tax-rate', verifyToken, requireRole(3), getBranchTaxRate);
+router.put('/:branchId/tax-rate', verifyToken, requireRole(3), updateBranchTaxRate);
 
 // Regular branch fetching
 router.get("/getBranches", verifyToken, getBranches);
