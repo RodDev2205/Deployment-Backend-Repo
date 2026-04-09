@@ -10,6 +10,6 @@ CREATE TABLE IF NOT EXISTS `branch_tax` (
   CONSTRAINT `fk_branch_tax_branch_id` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`branch_id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Insert default tax rates for existing branches (0% by default)
+-- Insert default tax rates for ALL branches (including newly created ones)
 INSERT IGNORE INTO `branch_tax` (`branch_id`, `tax_rate`)
 SELECT `branch_id`, 0.00 FROM `branches`;

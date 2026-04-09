@@ -422,7 +422,7 @@ export const getBranchesWithTax = async (req, res) => {
       ORDER BY b.branch_name
     `);
 
-    res.json(branches);
+    res.status(200).json({ branches });
   } catch (error) {
     console.error("Error fetching branches with tax:", error);
     res.status(500).json({ error: "Failed to fetch branches with tax" });
