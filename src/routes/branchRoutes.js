@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createBranch, updateBranch, createLocation, getBranches, getAllBranches, getBranchLocations, getBranchAdmins, toggleBranchStatus } from "../controllers/branchController.js";
+import { createBranch, updateBranch, createLocation, getBranches, getAllBranches, getBranchLocations, getBranchAdmins, toggleBranchStatus, getBranchTaxRate, updateBranchTaxRate, getBranchesWithTax, getCurrentBranchTaxRate } from "../controllers/branchController.js";
 import { verifyToken } from "../middlewares/verifyToken.js";
 import { requireRole } from "../middlewares/requireRole.js";
 
@@ -24,6 +24,18 @@ router.patch(
   requireRole(3),
   toggleBranchStatus
 );
+
+// Tax rate management - SuperAdmin only
+router.get("/:branchId/tax-rate", verifyToken, requireRole(3), getBranchTaxRate);
+router.put("/:branchId/tax-rate", verifyToken, requireRole(3), updateBranchTaxRate);
+
+// Get branches with tax rates for tax management
+router.get("/getBranchesWithTax", verifyToken, requireRole(3), getBranchesWithTax);
+
+// Get current user's branch tax rate (for POS display)
+router.get("/current/tax-rate", verifyToken, getCurrentBranchTaxRate);
+
+// Regular branch fetching
 router.get("/getBranches", verifyToken, getBranches);
 router.get("/getAll", verifyToken, getAllBranches);
 router.get("/:branchId/admins", verifyToken, getBranchAdmins);
