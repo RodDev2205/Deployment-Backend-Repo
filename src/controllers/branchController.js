@@ -418,7 +418,11 @@ export const getBranchesWithTax = async (req, res) => {
         b.status,
         COALESCE(bt.tax_rate, 0.00) as tax_rate
       FROM branches b
-      LEFT JOIN branch_tax bt ON b.branch_id = bt.branch_id
+      LEFT JOIN (
+        SELECT branch_id, MAX(tax_rate) AS tax_rate
+        FROM branch_tax
+        GROUP BY branch_id
+      ) bt ON b.branch_id = bt.branch_id
       ORDER BY b.branch_name
     `);
 
