@@ -413,7 +413,7 @@ export const getBranchesWithTax = async (req, res) => {
     const [branches] = await db.query(`
       SELECT
         b.branch_id,
-        b.branch_name,
+        b.branch_name AS name,
         b.address,
         b.status,
         COALESCE(bt.tax_rate, 0.00) as tax_rate
