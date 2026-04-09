@@ -252,7 +252,7 @@ export const getCurrentBranchTaxRate = async (req, res) => {
       [userBranchId]
     );
 
-    const taxRate = taxResult.length > 0 ? taxResult[0].tax_rate : 0.00;
+    const taxRate = taxResult.length > 0 ? Number(taxResult[0].tax_rate) : 0;
 
     res.json({ tax_rate: taxRate });
   } catch (error) {
