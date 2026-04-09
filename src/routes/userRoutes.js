@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { updateUser, getActiveEmployeeCount, getUser, getCurrentUser } from "../controllers/userController.js";
+import { updateUser, updateCurrentUser, getActiveEmployeeCount, getUser, getCurrentUser } from "../controllers/userController.js";
 import { verifyToken } from "../middlewares/verifyToken.js";
 import { requireRole } from "../middlewares/requireRole.js";
 const router = Router();
@@ -19,6 +19,11 @@ router.get(
 
 // convenience endpoint: return profile of authenticated user
 router.get("/user/me", verifyToken, getCurrentUser);
+
+// profile endpoints for current authenticated user
+router.route("/profile")
+  .get(verifyToken, getCurrentUser)
+  .put(verifyToken, updateCurrentUser);
 
 router.patch(
   "/user/:id",

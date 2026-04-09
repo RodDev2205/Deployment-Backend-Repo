@@ -129,9 +129,12 @@ export const getCurrentUser = async (req, res) => {
     console.log('getCurrentUser called with user_id:', userId, 'username:', username);
     console.log('req.user object:', req.user);
 
+    const selectFields = req.user?.role_id === 3
+      ? `u.user_id, u.first_name, u.last_name, u.username, u.contact_number, u.role_id, r.role_name, u.branch_id, u.status, u.created_at`
+      : `u.user_id, u.first_name, u.last_name, u.username, u.email, u.contact_number, u.role_id, r.role_name, u.branch_id, u.status, u.created_at`;
+
     let query = `
-      SELECT u.user_id, u.first_name, u.last_name, u.username, u.email, u.contact_number, u.role_id, r.role_name,
-             u.branch_id, u.status, u.created_at
+      SELECT ${selectFields}
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.role_id
       WHERE u.user_id = ?
@@ -140,8 +143,7 @@ export const getCurrentUser = async (req, res) => {
 
     if (!userId && username) {
       query = `
-        SELECT u.user_id, u.first_name, u.last_name, u.username, u.email, u.contact_number, u.role_id, r.role_name,
-               u.branch_id, u.status, u.created_at
+        SELECT ${selectFields}
         FROM users u
         LEFT JOIN roles r ON u.role_id = r.role_id
         WHERE u.username = ?
@@ -182,6 +184,19 @@ export const getCurrentUser = async (req, res) => {
   } catch (err) {
     console.error('getCurrentUser error', err);
     res.status(500).json({ error: 'Failed to fetch current user', details: err.message });
+  }
+};
+
+export const updateCurrentUser = async (req, res) => {
+  try {
+    req.params.id = String(req.user.user_id);
+    req.body.password = req.body.password ?? req.body.new_password;
+    req.body.old_password = req.body.old_password ?? req.body.current_password;
+    delete req.body.branch_id; // users cannot change branch via profile update
+    return await updateUser(req, res);
+  } catch (err) {
+    console.error('updateCurrentUser error', err);
+    res.status(500).json({ error: 'Failed to update profile', details: err.message });
   }
 };
 
