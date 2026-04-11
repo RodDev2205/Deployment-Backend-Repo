@@ -125,49 +125,31 @@ export const getSalesTodayByBranch = async (req, res) => {
         COUNT(*) as all_transaction_count,
         MAX(CASE WHEN t.status = 'Completed' THEN t.total_amount ELSE NULL END) as max_order_value,
         MIN(CASE WHEN t.status = 'Completed' THEN t.total_amount ELSE NULL END) as min_order_value,
-        COUNT(DISTINCT CASE WHEN t.status IN ('Voided', 'Partial Voided') THEN t.cashier_id ELSE NULL END) as staff_who_voided_count
+        COUNT(DISTINCT CASE WHEN t.status IN ('Voided', 'Partial Voided') THEN t.cashier_id ELSE NULL END) as staff_who_voided_count,
+        SUM(CASE WHEN t.status = 'Completed' THEN t.total_amount ELSE 0 END) as total_sales,
+        SUM(CASE WHEN t.status = 'Completed' THEN t.total_amount ELSE 0 END) as gross_sales
       FROM transactions t
       WHERE DATE(t.created_at) = CURDATE()
     `;
 
-    // Calculate gross_sales and voided_sales from transaction_items
-    // Gross Sales: Total value of all items originally ordered (quantity + voided_quantity)
-    // Voided Sales: Value of voided portions
-    // Net Sales: Gross Sales - Voided Sales
-    let itemsQuery = `
-      SELECT
-        SUM((ti.quantity + ti.voided_quantity) * ti.price) as gross_sales,
-        SUM(ti.voided_quantity * ti.price) as voided_sales
-      FROM transaction_items ti
-      INNER JOIN transactions t ON ti.transaction_id = t.transaction_id
-      WHERE DATE(t.created_at) = CURDATE()
-    `;
-
     let params = [];
-    let itemsParams = [];
 
     // Filter by branch if admin
     if (role_id === 2) {
       query += ` AND t.branch_id = ?`;
       params.push(branch_id);
-      itemsQuery += ` AND t.branch_id = ?`;
-      itemsParams.push(branch_id);
     }
 
     const [[result]] = await db.query(query, params);
-    const [[itemsResult]] = await db.query(itemsQuery, itemsParams);
 
-    const gross_sales = Number(itemsResult?.gross_sales || 0);
-    const voided_sales = Number(itemsResult?.voided_sales || 0);
-    const net_sales = gross_sales - voided_sales;
-
-    // Calculate avg_order_value from net sales and completed transaction count
-    const avgOrderValue = result?.completed_count > 0 ? Number((net_sales / result.completed_count).toFixed(2)) : 0;
+    const total_sales = Number(result?.total_sales || 0);
+    const gross_sales = Number(result?.gross_sales || 0);
+    const avgOrderValue = result?.completed_count > 0 ? Number((total_sales / result.completed_count).toFixed(2)) : 0;
 
     res.json({
-      total_sales: net_sales, // Net sales after voids (current remaining value)
-      gross_sales: gross_sales, // Total value of all items originally ordered
-      voided_sales: voided_sales, // Value of voided portions
+      total_sales,
+      gross_sales,
+      voided_sales: 0,
       transaction_count: result?.all_transaction_count || 0,
       completed_count: result?.completed_count || 0,
       partial_refunded_count: result?.partial_refunded_count || 0,
@@ -282,9 +264,21 @@ export const getTopProductsByBranch = async (req, res) => {
       SELECT ti.menu_id,
              COALESCE(p.product_name, '') AS product_name,
              SUM(ti.quantity) AS total_qty,
-             SUM(ti.quantity * ti.price) AS total_amount
+             SUM(
+               CASE
+                 WHEN txn.item_subtotal > 0
+                 THEN (ti.quantity * ti.price) / txn.item_subtotal * t.total_amount
+                 ELSE ti.quantity * ti.price
+               END
+             ) AS total_amount
       FROM transaction_items ti
       JOIN transactions t ON ti.transaction_id = t.transaction_id
+      JOIN (
+        SELECT transaction_id,
+               SUM(quantity * price) AS item_subtotal
+        FROM transaction_items
+        GROUP BY transaction_id
+      ) txn ON txn.transaction_id = ti.transaction_id
       LEFT JOIN products p ON ti.menu_id = p.product_id
       WHERE t.status IN ('Completed', 'Partial Voided')
     `;
@@ -301,7 +295,7 @@ export const getTopProductsByBranch = async (req, res) => {
     }
 
     query += `
-      GROUP BY ti.menu_id
+      GROUP BY ti.menu_id, p.product_name
       ORDER BY total_qty DESC, total_amount DESC
     `;
 
