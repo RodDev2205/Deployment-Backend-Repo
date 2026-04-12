@@ -155,6 +155,9 @@ export const completeSale = async (req, res) => {
       discountAmount = (subtotal * discountObj.value) / 100;
     } else if (discountObj.type === "fixed") {
       discountAmount = discountObj.value;
+    } else if (discountObj.type === "senior") {
+      // Senior discount: value is 0.2 (decimal form of 20%), apply to subtotal
+      discountAmount = subtotal * discountObj.value;
     }
 
     // Calculate tax on discounted subtotal
