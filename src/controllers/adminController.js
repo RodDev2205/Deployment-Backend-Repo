@@ -85,18 +85,20 @@ export const getCashiers = async (req, res) => {
 
     const [rows] = await db.query(`
       SELECT 
-        user_id as id,
-        first_name,
-        last_name,
-        username,
-        role_id,
-        status,
-        contact_number
-      FROM users
-      WHERE role_id = 1 
-        AND branch_id = ?
-        AND created_by = ?
-      ORDER BY user_id DESC
+        u.user_id as id,
+        u.first_name,
+        u.last_name,
+        u.username,
+        u.role_id,
+        r.role_name,
+        u.status,
+        u.contact_number
+      FROM users u
+      LEFT JOIN roles r ON u.role_id = r.role_id
+      WHERE u.role_id = 1 
+        AND u.branch_id = ?
+        AND u.created_by = ?
+      ORDER BY u.user_id DESC
     `, [branchId, creatorId]);
 
     res.json(rows);

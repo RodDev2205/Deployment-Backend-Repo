@@ -11,11 +11,14 @@ export const getAdmin = async (req, res) => {
         b.branch_name AS branch,
         u.username,
         u.contact_number,
+        u.role_id,
+        r.role_name,
         u.status,
         u.created_at,
         created_user.username AS created_by
       FROM users u
       LEFT JOIN branches b ON u.branch_id = b.branch_id
+      LEFT JOIN roles r ON u.role_id = r.role_id
       LEFT JOIN users created_user ON u.created_by = created_user.user_id
       WHERE u.role_id = 2
       ORDER BY u.user_id DESC
@@ -38,11 +41,14 @@ export const getCashiers = async (req, res) => {
         b.branch_name AS branch,
         u.username,
         u.contact_number,
+        u.role_id,
+        r.role_name,
         u.status,
         u.created_at,
         created_user.username AS created_by
       FROM users u
       LEFT JOIN branches b ON u.branch_id = b.branch_id
+      LEFT JOIN roles r ON u.role_id = r.role_id
       LEFT JOIN users created_user ON u.created_by = created_user.user_id
       WHERE u.role_id = 1
       ORDER BY u.user_id DESC

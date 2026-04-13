@@ -336,8 +336,11 @@ export const getBranchAdmins = async (req, res) => {
         u.last_name,
         u.username,
         u.contact_number,
+        u.role_id,
+        r.role_name,
         u.status
       FROM users u
+      LEFT JOIN roles r ON u.role_id = r.role_id
       WHERE u.branch_id = ? AND u.role_id = 2 ${statusFilter}
       ORDER BY u.first_name ASC, u.last_name ASC`,
       [branchId]
