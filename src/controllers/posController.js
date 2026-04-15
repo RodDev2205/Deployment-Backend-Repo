@@ -250,6 +250,20 @@ export const completeSale = async (req, res) => {
       );
     }
 
+    // ==================== STEP 7: Insert discount details if applicable ====================
+    if ((discountObj.type === "senior" || discountObj.type === "pwd") && discountObj.verification) {
+      await connection.query(
+        `INSERT INTO discount_details (name, id_number, discount_type, transaction_id)
+         VALUES (?, ?, ?, ?)`,
+        [
+          discountObj.verification.fullName,
+          discountObj.verification.idNumber,
+          discountObj.type,
+          transactionId
+        ]
+      );
+    }
+
     await connection.commit();
 
     // Log the completed transaction
@@ -294,6 +308,7 @@ export const completeSale = async (req, res) => {
  * @param {string} options.orderType - Order type ('dine-in' or 'takeout')
  * @param {Object} options.discount - Discount object {type: 'percentage'|'fixed'|'senior'|'pwd', value: number}
  *                                   For senior and pwd, the backend treats value as 0.2 (20%).
+ * @param {Object} options.verification - Verification data for senior/pwd {fullName, idNumber, discountType}
  * @returns {Object} Transaction details
  */
 export const createTransaction = async (branchId, items, options = {}) => {
@@ -390,6 +405,20 @@ export const createTransaction = async (branchId, items, options = {}) => {
           item.price,
           Number(item.price) * Number(item.quantity),
           0
+        ]
+      );
+    }
+
+    // Insert discount details if applicable
+    if ((discount.type === "senior" || discount.type === "pwd") && discount.verification) {
+      await connection.query(
+        `INSERT INTO discount_details (name, id_number, discount_type, transaction_id)
+         VALUES (?, ?, ?, ?)`,
+        [
+          discount.verification.fullName,
+          discount.verification.idNumber,
+          discount.type,
+          transactionId
         ]
       );
     }
