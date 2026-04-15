@@ -280,8 +280,6 @@ export const completeSale = async (req, res) => {
       totalAmount,
       changeAmount,
       cashierName: user.name || user.username || 'Cashier',
-      taxRate: taxRate ?? 0,
-      taxAmount: taxAmount ?? 0,
       discountType: discountObj?.type || 'none',
       discountAmount: discountAmount ?? 0,
       discountHolderName: discount?.holderName || '',
