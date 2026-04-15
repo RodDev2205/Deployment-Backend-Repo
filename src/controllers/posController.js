@@ -502,8 +502,21 @@ export const getTransactionDetails = async (req, res) => {
       [transactionId]
     );
 
+    // Fetch discount details if applicable (senior or pwd discount)
+    let discountDetails = null;
+    if (transaction.discount_type === 'senior' || transaction.discount_type === 'pwd') {
+      const [discountRows] = await db.query(
+        `SELECT name, id_number, discount_type FROM discount_details WHERE transaction_id = ?`,
+        [transactionId]
+      );
+      
+      if (discountRows && discountRows.length > 0) {
+        discountDetails = discountRows[0];
+      }
+    }
+
     // transaction object now includes branch_address and branch_contact
-    res.status(200).json({ transaction, items });
+    res.status(200).json({ transaction, items, discountDetails });
   } catch (error) {
     console.error("DB ERROR (getTransactionDetails):", error);
     res.status(500).json({ message: "Database error", error: error.message });
