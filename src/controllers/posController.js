@@ -134,17 +134,17 @@ export const completeSale = async (req, res) => {
     // ==================== STEP 3: Calculate totals ====================
 
 
-    const discountObj = discount || { type: "none", value: 0 };
-    let discountAmount = 0;
+    const discountObj = discount || { type: "none", value: 0, amount: 0 };
+    let discountAmount = discountObj.amount || 0;
 
     if (discountObj.type === "percentage") {
-      discountAmount = (subtotal * discountObj.value) / 100;
+      discountAmount = discountAmount || (subtotal * discountObj.value) / 100;
     } else if (discountObj.type === "fixed") {
-      discountAmount = discountObj.value;
+      discountAmount = discountAmount || discountObj.value;
     } else if (discountObj.type === "senior" || discountObj.type === "pwd") {
       // Senior and PWD discounts are both a fixed 20% discount.
       discountObj.value = 0.2;
-      discountAmount = subtotal * 0.2;
+      discountAmount = discountAmount || subtotal * 0.2;
     }
 
     const totalAmount = subtotal - discountAmount;
