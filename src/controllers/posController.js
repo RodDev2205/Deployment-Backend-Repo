@@ -155,9 +155,10 @@ export const completeSale = async (req, res) => {
       discountAmount = (subtotal * discountObj.value) / 100;
     } else if (discountObj.type === "fixed") {
       discountAmount = discountObj.value;
-    } else if (discountObj.type === "senior") {
-      // Senior discount: value is 0.2 (decimal form of 20%), apply to subtotal
-      discountAmount = subtotal * discountObj.value;
+    } else if (discountObj.type === "senior" || discountObj.type === "pwd") {
+      // Senior and PWD discounts are both a fixed 20% discount.
+      discountObj.value = 0.2;
+      discountAmount = subtotal * 0.2;
     }
 
     // Calculate tax on discounted subtotal
@@ -291,7 +292,8 @@ export const completeSale = async (req, res) => {
  * @param {number} options.amountPaid - Amount paid by customer
  * @param {number} options.cashierId - Cashier user ID
  * @param {string} options.orderType - Order type ('dine-in' or 'takeout')
- * @param {Object} options.discount - Discount object {type: 'percentage'|'fixed', value: number}
+ * @param {Object} options.discount - Discount object {type: 'percentage'|'fixed'|'senior'|'pwd', value: number}
+ *                                   For senior and pwd, the backend treats value as 0.2 (20%).
  * @returns {Object} Transaction details
  */
 export const createTransaction = async (branchId, items, options = {}) => {
@@ -332,6 +334,9 @@ export const createTransaction = async (branchId, items, options = {}) => {
       discountAmount = (subtotal * discount.value) / 100;
     } else if (discount.type === 'fixed') {
       discountAmount = discount.value;
+    } else if (discount.type === 'senior' || discount.type === 'pwd') {
+      discount.value = 0.2;
+      discountAmount = subtotal * 0.2;
     }
 
     // Calculate tax on discounted subtotal
