@@ -314,7 +314,7 @@ export async function getTopMenuSalesByBranch(req, res) {
 
 /**
  * Sample sales report query as requested
- * Returns subtotal, tax_amount, and total_amount sums for a branch
+ * Returns subtotal and total_amount sums for a branch
  */
 export async function getSalesReport(req, res) {
   try {
@@ -327,7 +327,6 @@ export async function getSalesReport(req, res) {
     const [rows] = await db.execute(
       `SELECT
         SUM(subtotal) AS total_subtotal,
-        SUM(tax_amount) AS total_tax_amount,
         SUM(total_amount) AS total_amount,
         COUNT(*) AS transaction_count
        FROM transactions
@@ -337,14 +336,12 @@ export async function getSalesReport(req, res) {
 
     const result = rows[0] || {
       total_subtotal: 0,
-      total_tax_amount: 0,
       total_amount: 0,
       transaction_count: 0
     };
 
     // Ensure numeric values
     result.total_subtotal = Number(result.total_subtotal || 0);
-    result.total_tax_amount = Number(result.total_tax_amount || 0);
     result.total_amount = Number(result.total_amount || 0);
     result.transaction_count = Number(result.transaction_count || 0);
 

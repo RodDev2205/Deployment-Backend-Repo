@@ -176,90 +176,7 @@ export const getAllBranches = async (req, res) => {
   }
 };
 
-export const getBranchTaxRate = async (req, res) => {
-  try {
-    const { branchId } = req.params;
 
-    const [taxResult] = await db.query(
-      `SELECT tax_rate FROM branch_tax WHERE branch_id = ?`,
-      [branchId]
-    );
-
-    if (taxResult.length === 0) {
-      return res.status(404).json({ error: "Tax rate not found for this branch" });
-    }
-
-    res.json({ tax_rate: taxResult[0].tax_rate });
-  } catch (error) {
-    console.error("Error fetching branch tax rate:", error);
-    res.status(500).json({ error: "Failed to fetch branch tax rate" });
-  }
-};
-
-export const updateBranchTaxRate = async (req, res) => {
-  try {
-    const { branchId } = req.params;
-    const { tax_rate } = req.body;
-
-    // Validate tax rate
-    if (tax_rate === undefined || tax_rate === null) {
-      return res.status(400).json({ error: "Tax rate is required" });
-    }
-
-    const rate = parseFloat(tax_rate);
-    if (isNaN(rate) || rate < 0 || rate > 100) {
-      return res.status(400).json({ error: "Tax rate must be a number between 0 and 100" });
-    }
-
-    // Check if branch exists
-    const [branchCheck] = await db.query(
-      `SELECT branch_id FROM branches WHERE branch_id = ?`,
-      [branchId]
-    );
-
-    if (branchCheck.length === 0) {
-      return res.status(404).json({ error: "Branch not found" });
-    }
-
-    // Insert or update tax rate
-    await db.query(
-      `INSERT INTO branch_tax (branch_id, tax_rate) VALUES (?, ?)
-       ON DUPLICATE KEY UPDATE tax_rate = VALUES(tax_rate)`,
-      [branchId, rate]
-    );
-
-    res.json({
-      message: "Tax rate updated successfully",
-      branch_id: branchId,
-      tax_rate: rate
-    });
-  } catch (error) {
-    console.error("Error updating branch tax rate:", error);
-    res.status(500).json({ error: "Failed to update branch tax rate" });
-  }
-};
-
-export const getCurrentBranchTaxRate = async (req, res) => {
-  try {
-    const userBranchId = req.user?.branch_id;
-
-    if (!userBranchId) {
-      return res.status(400).json({ error: "User branch not found" });
-    }
-
-    const [taxResult] = await db.query(
-      `SELECT tax_rate FROM branch_tax WHERE branch_id = ?`,
-      [userBranchId]
-    );
-
-    const taxRate = taxResult.length > 0 ? Number(taxResult[0].tax_rate) : 0;
-
-    res.json({ tax_rate: taxRate });
-  } catch (error) {
-    console.error("Error fetching current branch tax rate:", error);
-    res.status(500).json({ error: "Failed to fetch branch tax rate" });
-  }
-};
 
 export const updateBranch = async (req, res) => {
   try {
@@ -411,27 +328,4 @@ export const toggleBranchStatus = async (req, res) => {
   }
 };
 
-export const getBranchesWithTax = async (req, res) => {
-  try {
-    const [branches] = await db.query(`
-      SELECT
-        b.branch_id,
-        b.branch_name AS name,
-        b.address,
-        b.status,
-        COALESCE(bt.tax_rate, 0.00) as tax_rate
-      FROM branches b
-      LEFT JOIN (
-        SELECT branch_id, MAX(tax_rate) AS tax_rate
-        FROM branch_tax
-        GROUP BY branch_id
-      ) bt ON b.branch_id = bt.branch_id
-      ORDER BY b.branch_name
-    `);
 
-    res.status(200).json({ branches });
-  } catch (error) {
-    console.error("Error fetching branches with tax:", error);
-    res.status(500).json({ error: "Failed to fetch branches with tax" });
-  }
-};

@@ -132,21 +132,7 @@ export const completeSale = async (req, res) => {
     }
 
     // ==================== STEP 3: Calculate totals ====================
-    // Get tax rate for the branch
-    const [[taxRow]] = await connection.query(
-      'SELECT tax_rate FROM branch_tax WHERE branch_id = ?',
-      [user.branch_id]
-    );
 
-    if (!taxRow) {
-      await connection.rollback();
-      return res.status(400).json({
-        success: false,
-        message: `Tax rate not configured for branch ${user.branch_id}`,
-      });
-    }
-
-    const taxRate = Number(taxRow.tax_rate);
 
     const discountObj = discount || { type: "none", value: 0 };
     let discountAmount = 0;
@@ -161,11 +147,7 @@ export const completeSale = async (req, res) => {
       discountAmount = subtotal * 0.2;
     }
 
-    // Calculate tax on discounted subtotal
-    const taxableAmount = subtotal - discountAmount;
-    const taxAmount = Math.round((taxableAmount * (taxRate / 100)) * 100) / 100; // Round to 2 decimal places
-
-    const totalAmount = taxableAmount + taxAmount;
+    const totalAmount = subtotal - discountAmount;
     const changeAmount = Number(amountPaid) - totalAmount;
 
     if (changeAmount < 0) {
@@ -214,17 +196,15 @@ export const completeSale = async (req, res) => {
     const [transactionResult] = await connection.query(
       `INSERT INTO transactions
        (transaction_number, subtotal, discount_type, discount_value, discount_amount,
-        tax_rate, tax_amount, total_amount, payment_method, amount_paid, change_amount,
+        total_amount, payment_method, amount_paid, change_amount,
         cashier_id, branch_id, status, order_type)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         transactionNumber,
         subtotal,
         discountObj.type || "none",
         discountObj.value || 0,
         discountAmount,
-        taxRate,
-        taxAmount,
         totalAmount,
         paymentMethod,
         amountPaid,
@@ -298,8 +278,8 @@ export const completeSale = async (req, res) => {
 };
 
 /**
- * Creates a new transaction with proper tax calculation
- * @param {number} branchId - The branch ID for tax calculation
+ * Creates a new transaction
+ * @param {number} branchId - The branch ID
  * @param {Array} items - Array of items [{product_id, price, quantity}]
  * @param {Object} options - Additional options
  * @param {string} options.paymentMethod - Payment method
@@ -321,17 +301,7 @@ export const createTransaction = async (branchId, items, options = {}) => {
   try {
     await connection.beginTransaction();
 
-    // Get tax rate for the branch
-    const [[taxRow]] = await connection.query(
-      'SELECT tax_rate FROM branch_tax WHERE branch_id = ?',
-      [branchId]
-    );
 
-    if (!taxRow) {
-      throw new Error(`Tax rate not found for branch ${branchId}`);
-    }
-
-    const taxRate = Number(taxRow.tax_rate);
 
     // Calculate subtotal
     let subtotal = 0;
@@ -354,12 +324,8 @@ export const createTransaction = async (branchId, items, options = {}) => {
       discountAmount = subtotal * 0.2;
     }
 
-    // Calculate tax on discounted subtotal
-    const taxableAmount = subtotal - discountAmount;
-    const taxAmount = Math.round((taxableAmount * (taxRate / 100)) * 100) / 100; // Round to 2 decimal places
-
     // Calculate total
-    const totalAmount = taxableAmount + taxAmount;
+    const totalAmount = subtotal - discountAmount;
 
     // Generate transaction number
     const transactionNumber = generateTransactionNumber();
@@ -368,17 +334,15 @@ export const createTransaction = async (branchId, items, options = {}) => {
     const [transactionResult] = await connection.query(
       `INSERT INTO transactions
        (transaction_number, subtotal, discount_type, discount_value, discount_amount,
-        tax_rate, tax_amount, total_amount, payment_method, amount_paid, change_amount,
+        total_amount, payment_method, amount_paid, change_amount,
         cashier_id, branch_id, status, order_type, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
       [
         transactionNumber,
         subtotal,
         discount.type || 'none',
         discount.value || 0,
         discountAmount,
-        taxRate,
-        taxAmount,
         totalAmount,
         options.paymentMethod || 'cash',
         options.amountPaid || totalAmount,
@@ -430,8 +394,6 @@ export const createTransaction = async (branchId, items, options = {}) => {
       transactionNumber,
       subtotal,
       discountAmount,
-      taxRate,
-      taxAmount,
       totalAmount,
       items: items.length
     };
