@@ -9,6 +9,7 @@ export const getAllProducts = async (req, res) => {
         p.price,
         p.status,
         p.approval_status,
+        p.vat_type,
         p.image_name,
         p.image_path,
         p.created_by,
@@ -62,7 +63,7 @@ export const getMenuApprovedByBranch = async (req, res) => {
     const { branch_id } = req.params;
 
     const [rows] = await db.query(
-      `SELECT p.product_id, p.product_name, p.price, p.status, p.approval_status, 
+      `SELECT p.product_id, p.product_name, p.price, p.status, p.approval_status, p.vat_type,
               p.image_name, p.image_path, p.created_by, p.branch_id,
               c.category_name
        FROM products p

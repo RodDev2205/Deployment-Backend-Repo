@@ -50,7 +50,7 @@ export const getAllProducts = async (req, res) => {
 
     // build base query; archived view should not filter by approval_status
     let baseQuery = `SELECT p.product_id, p.product_name, p.price, p.status, p.menu_status, p.approval_status, 
-              p.image_name, p.image_path, p.created_by, p.branch_id,
+              p.vat_type, p.image_name, p.image_path, p.created_by, p.branch_id,
               c.category_name
        FROM products p
        JOIN categories c ON p.category_id = c.category_id
@@ -91,7 +91,7 @@ export const getArchivedProducts = async (req, res) => {
     const userBranchId = req.user.branch_id;
     
     let baseQuery = `SELECT p.product_id, p.product_name, p.price, p.status, p.menu_status, p.approval_status, 
-              p.image_name, p.image_path, p.created_by, p.branch_id,
+              p.vat_type, p.image_name, p.image_path, p.created_by, p.branch_id,
               c.category_name
        FROM products p
        JOIN categories c ON p.category_id = c.category_id
@@ -123,9 +123,13 @@ export const createProduct = async (req, res) => {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    let { product_name, category_id, price, ingredients } = req.body;
+    let { product_name, category_id, price, ingredients, vat_type = 'vat' } = req.body;
     const created_by = req.user.user_id;
     const branch_id = req.user.branch_id;
+
+    if (vat_type !== 'non-vat') {
+      vat_type = 'vat';
+    }
 
     // Parse ingredients if it comes as a JSON string (from FormData)
     if (typeof ingredients === 'string') {
@@ -142,9 +146,9 @@ export const createProduct = async (req, res) => {
     // 1️⃣ Insert product first
     const [result] = await connection.query(
       `INSERT INTO products 
-      (product_name, category_id, price, image_name, image_path, created_by, branch_id, approval_status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [product_name, category_id, price, image_name, image_path, created_by, branch_id, 'PENDING']
+      (product_name, category_id, price, image_name, image_path, created_by, branch_id, approval_status, vat_type)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [product_name, category_id, price, image_name, image_path, created_by, branch_id, 'PENDING', vat_type]
     );
 
     const productId = result.insertId;
@@ -193,7 +197,7 @@ export const updateProduct = async (req, res) => {
     await connection.beginTransaction();
 
     const { id } = req.params;
-    let { product_name, category_id, price, status, menu_status, ingredients } = req.body;
+    let { product_name, category_id, price, status, menu_status, ingredients, vat_type } = req.body;
 
     // Parse ingredients if sent as JSON string (FormData)
     if (typeof ingredients === 'string') {
@@ -202,6 +206,11 @@ export const updateProduct = async (req, res) => {
       } catch (e) {
         ingredients = [];
       }
+    }
+
+    // Normalize vat_type values
+    if (vat_type !== undefined) {
+      vat_type = vat_type === 'non-vat' ? 'non-vat' : 'vat';
     }
 
     // Build update query
@@ -229,6 +238,11 @@ export const updateProduct = async (req, res) => {
     if (req.file) {
       query += `, image_name=?, image_path=?`;
       params.push(req.file.originalname, `/uploads/${req.file.filename}`);
+    }
+
+    if (typeof vat_type !== 'undefined') {
+      query += `, vat_type=?`;
+      params.push(vat_type);
     }
 
     query += ` WHERE product_id=?`;
@@ -267,7 +281,7 @@ export const updateProduct = async (req, res) => {
 
     // Return the updated product including category_name
     const [row] = await db.query(
-      `SELECT p.product_id, p.product_name, p.price, p.status, p.menu_status, p.approval_status, p.category_id,
+      `SELECT p.product_id, p.product_name, p.price, p.status, p.menu_status, p.approval_status, p.vat_type, p.category_id,
               p.image_name, p.image_path, p.created_by, p.branch_id, c.category_name
        FROM products p
        JOIN categories c ON p.category_id = c.category_id
@@ -334,7 +348,7 @@ export const getDeclinedProducts = async (req, res) => {
     const branchId = req.user.branch_id;
 
     const [rows] = await db.query(
-      `SELECT p.product_id, p.product_name, p.price, p.status, p.approval_status,
+      `SELECT p.product_id, p.product_name, p.price, p.status, p.approval_status, p.vat_type,
               p.image_name, p.image_path, p.created_by, p.branch_id, p.decline_reason,
               c.category_name, u.username as reviewed_by
        FROM products p
