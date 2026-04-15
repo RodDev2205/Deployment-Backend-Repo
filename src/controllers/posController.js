@@ -50,13 +50,14 @@ export const completeSale = async (req, res) => {
     await connection.beginTransaction();
 
     let subtotal = 0;
+    let vatExclusiveSubtotal = 0;
     const transactionItemsData = [];
     const ingredientDeductions = new Map(); // Track ingredient deductions needed
 
     // ==================== STEP 1: Validate items & collect ingredient needs ====================
     for (const item of cart) {
       const [productRows] = await connection.query(
-        `SELECT product_id, price FROM products WHERE product_id = ?`,
+        `SELECT product_id, price, vat_type FROM products WHERE product_id = ?`,
         [item.product_id]
       );
 
@@ -69,14 +70,21 @@ export const completeSale = async (req, res) => {
       }
 
       const price = Number(productRows[0].price);
+      const vatType = productRows[0].vat_type;
+      const priceExclVat = vatType === 'vat' ? price / 1.12 : price;
       const itemTotal = price * item.qty;
+      const itemTotalExclVat = priceExclVat * item.qty;
+
       subtotal += itemTotal;
+      vatExclusiveSubtotal += itemTotalExclVat;
 
       transactionItemsData.push({
         menu_id: item.product_id,
         quantity: item.qty,
         price: price,
         total: itemTotal,
+        priceExclVat,
+        totalExclVat: itemTotalExclVat,
       });
 
       // Get linked ingredients
@@ -136,18 +144,20 @@ export const completeSale = async (req, res) => {
 
     const discountObj = discount || { type: "none", value: 0, amount: 0 };
     let discountAmount = discountObj.amount || 0;
+    const useVatExclusivePricing = discountObj.type === "senior" || discountObj.type === "pwd";
+    const effectiveSubtotal = useVatExclusivePricing ? vatExclusiveSubtotal : subtotal;
 
     if (discountObj.type === "percentage") {
-      discountAmount = discountAmount || (subtotal * discountObj.value) / 100;
+      discountAmount = discountAmount || (effectiveSubtotal * discountObj.value) / 100;
     } else if (discountObj.type === "fixed") {
       discountAmount = discountAmount || discountObj.value;
-    } else if (discountObj.type === "senior" || discountObj.type === "pwd") {
-      // Senior and PWD discounts are both a fixed 20% discount.
+    } else if (useVatExclusivePricing) {
+      // Senior and PWD discounts are both a fixed 20% discount applied to VAT-exclusive prices.
       discountObj.value = 0.2;
-      discountAmount = discountAmount || subtotal * 0.2;
+      discountAmount = discountAmount || effectiveSubtotal * 0.2;
     }
 
-    const totalAmount = subtotal - discountAmount;
+    const totalAmount = effectiveSubtotal - discountAmount;
     const changeAmount = Number(amountPaid) - totalAmount;
 
     if (changeAmount < 0) {
@@ -201,7 +211,7 @@ export const completeSale = async (req, res) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         transactionNumber,
-        subtotal,
+        effectiveSubtotal,
         discountObj.type || "none",
         discountObj.value || 0,
         discountAmount,
@@ -222,11 +232,13 @@ export const completeSale = async (req, res) => {
 
     // ==================== STEP 6: Insert transaction items ====================
     for (const item of transactionItemsData) {
+      const itemPrice = useVatExclusivePricing ? item.priceExclVat : item.price;
+      const itemTotal = useVatExclusivePricing ? item.totalExclVat : item.total;
       await connection.query(
         `INSERT INTO transaction_items 
          (transaction_id, menu_id, quantity, price, total, voided_quantity)
          VALUES (?, ?, ?, ?, ?, ?)`,
-        [transactionId, item.menu_id, item.quantity, item.price, item.total, 0]
+        [transactionId, item.menu_id, item.quantity, itemPrice, itemTotal, 0]
       );
     }
 
