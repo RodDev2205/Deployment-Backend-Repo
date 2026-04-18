@@ -6,6 +6,8 @@ import {
   updateProduct, 
   deleteProduct, 
   getMenuInventoryByProduct,
+  getBranchMenuProducts,
+  saveBranchMenuSelection,
   upload 
 } from "../controllers/menuController.js";
 import { getDeclinedProducts, editDeclinedProduct } from "../controllers/menuController.js";
@@ -16,6 +18,8 @@ const router = express.Router();
 
 router.get("/", verifyToken, requireRole(2, 1), getAllProducts);
 router.get("/archived", verifyToken, requireRole(2, 1), getArchivedProducts);
+router.get("/branch-menu", verifyToken, requireRole(2, 1), getBranchMenuProducts);
+router.post("/branch-menu", verifyToken, requireRole(2, 1), saveBranchMenuSelection);
 router.get("/:product_id/inventory", verifyToken, requireRole(2, 1), getMenuInventoryByProduct);
 router.post("/", verifyToken, requireRole(2, 1), upload.single("image"), createProduct);
 router.put("/:id", verifyToken, requireRole(2, 1), upload.single("image"), updateProduct);

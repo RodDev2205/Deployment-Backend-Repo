@@ -506,5 +506,105 @@ export const getMenuInventoryByProduct = async (req, res) => {
   }
 };
 
+// -------------------
+// Branch menu selection for branch admins
+// -------------------
+export const getBranchMenuProducts = async (req, res) => {
+  try {
+    const branchId = req.user?.branch_id;
+    if (!branchId) return res.status(401).json({ error: "Unauthorized" });
+
+    const [rows] = await db.query(
+      `SELECT p.product_id, p.product_name, p.price, p.status, p.menu_status, p.approval_status,
+              p.vat_type, p.image_name, p.image_path, p.branch_id AS origin_branch_id,
+              c.category_name,
+              IF(bm.branch_menu_id IS NULL, 0, bm.is_available) AS is_available,
+              bm.custom_price
+       FROM products p
+       JOIN categories c ON p.category_id = c.category_id
+       LEFT JOIN branch_menu bm ON bm.product_id = p.product_id AND bm.branch_id = ?
+       WHERE p.approval_status = 'APPROVED'
+         AND p.menu_status = 'active'
+         AND p.status = 'available'
+       ORDER BY p.product_name`,
+      [branchId]
+    );
+
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const saveBranchMenuSelection = async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const branchId = req.user?.branch_id;
+    const rawProductIds = req.body.product_ids;
+    if (!branchId) {
+      await connection.rollback();
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    if (!Array.isArray(rawProductIds)) {
+      await connection.rollback();
+      return res.status(400).json({ error: "product_ids must be an array" });
+    }
+
+    const productIds = rawProductIds
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value > 0);
+
+    const productIdsForQuery = productIds.length ? productIds : [0];
+
+    const [existingRows] = await connection.query(
+      `SELECT product_id FROM branch_menu WHERE branch_id = ? AND product_id IN (?)`,
+      [branchId, productIdsForQuery]
+    );
+    const existingIds = existingRows.map((row) => row.product_id);
+    const toInsert = productIds.filter((id) => !existingIds.includes(id));
+
+    if (toInsert.length > 0) {
+      const insertValues = toInsert.map(() => "(?, ?, 1, NULL, NOW(), NOW())").join(", ");
+      const insertParams = toInsert.flatMap((id) => [branchId, id]);
+      await connection.query(
+        `INSERT INTO branch_menu (branch_id, product_id, is_available, custom_price, created_at, updated_at) VALUES ${insertValues}`,
+        insertParams
+      );
+    }
+
+    if (existingIds.length > 0) {
+      await connection.query(
+        `UPDATE branch_menu SET is_available = 1, updated_at = NOW() WHERE branch_id = ? AND product_id IN (?)`,
+        [branchId, existingIds]
+      );
+    }
+
+    if (productIds.length > 0) {
+      await connection.query(
+        `UPDATE branch_menu SET is_available = 0, updated_at = NOW() WHERE branch_id = ? AND product_id NOT IN (?)`,
+        [branchId, productIds]
+      );
+    } else {
+      await connection.query(
+        `UPDATE branch_menu SET is_available = 0, updated_at = NOW() WHERE branch_id = ?`,
+        [branchId]
+      );
+    }
+
+    await connection.commit();
+    res.json({ message: "Branch menu selection updated successfully" });
+  } catch (err) {
+    await connection.rollback();
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    connection.release();
+  }
+};
+
 
 
