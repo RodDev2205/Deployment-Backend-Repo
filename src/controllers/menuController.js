@@ -51,11 +51,17 @@ export const getAllProducts = async (req, res) => {
     // build base query; archived view should not filter by approval_status
     let baseQuery = `SELECT p.product_id, p.product_name, p.price, p.status, p.menu_status, p.approval_status, 
               p.vat_type, p.image_name, p.image_path, p.created_by, p.branch_id,
-              c.category_name
+              c.category_name,
+              IF(bm.branch_menu_id IS NULL, 0, bm.is_available) AS is_available,
+              bm.custom_price
        FROM products p
        JOIN categories c ON p.category_id = c.category_id
-       WHERE p.branch_id = ?`;
-    const params = [userBranchId];
+       LEFT JOIN branch_menu bm ON bm.product_id = p.product_id AND bm.branch_id = ?
+       WHERE (
+         p.branch_id = ?
+         OR (bm.branch_menu_id IS NOT NULL AND bm.is_available = 1)
+       )`;
+    const params = [userBranchId, userBranchId];
 
     if (menuStatus === 'archived') {
       console.log("ARCHIVED BRANCH - keeping all approval states");
