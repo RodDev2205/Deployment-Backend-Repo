@@ -58,8 +58,8 @@ export const getAllProducts = async (req, res) => {
        JOIN categories c ON p.category_id = c.category_id
        LEFT JOIN branch_menu bm ON bm.product_id = p.product_id AND bm.branch_id = ?
        WHERE (
-         p.branch_id = 0
-         OR p.branch_id = ?
+         p.branch_id = ?
+         OR p.branch_id IS NULL
          OR (bm.branch_menu_id IS NOT NULL AND bm.is_available = 1)
        )`;
     const params = [userBranchId, userBranchId];
@@ -102,7 +102,7 @@ export const getArchivedProducts = async (req, res) => {
               c.category_name
        FROM products p
        JOIN categories c ON p.category_id = c.category_id
-       WHERE (p.branch_id = 0 OR p.branch_id = ?) AND p.menu_status = 'archived'`;
+       WHERE (p.branch_id = ? OR p.branch_id IS NULL) AND p.menu_status = 'archived'`;
     const params = [userBranchId];
 
     console.log("getArchivedProducts query=", baseQuery, "params=", params);
@@ -120,7 +120,7 @@ export const getArchivedProducts = async (req, res) => {
 // -------------------
 // CREATE product
 // -------------------
-/*export const createProduct = async (req, res) => {
+export const createProduct = async (req, res) => {
   const connection = await db.getConnection();
   
   try {
@@ -132,7 +132,7 @@ export const getArchivedProducts = async (req, res) => {
 
     let { product_name, category_id, price, ingredients, vat_type = 'vat' } = req.body;
     const created_by = req.user.user_id;
-    const branch_id = req.user.branch_id;
+    const branch_id = req.user.role_id === 3 ? null : req.user.branch_id; // Global if superadmin
     const role_id = req.user.role_id;
 
     if (vat_type !== 'non-vat') {
@@ -195,7 +195,7 @@ export const getArchivedProducts = async (req, res) => {
   } finally {
     connection.release();
   }
-};*/
+};
 
 
 // -------------------
@@ -516,79 +516,7 @@ export const getMenuInventoryByProduct = async (req, res) => {
   }
 };
 
-// -------------------
-// CREATE product
-// -------------------
-export const createProduct = async (req, res) => {
-  const connection = await db.getConnection();
-  try {
-    await connection.beginTransaction();
 
-    let { product_name, category_id, price, vat_type, ingredients } = req.body;
-    const created_by = req.user.user_id;
-    const role_id = req.user.role_id;
-    // Superadmin (role_id = 3) creates global products (branch_id = 0)
-    // Admin (role_id = 2) creates branch-specific products (branch_id = their branch)
-    const branch_id = role_id === 3 ? 0 : req.user.branch_id;
-
-    // Parse ingredients if sent as JSON string (FormData)
-    if (typeof ingredients === 'string') {
-      try {
-        ingredients = JSON.parse(ingredients);
-      } catch (e) {
-        ingredients = [];
-      }
-    }
-
-    // Normalize vat_type values
-    if (vat_type !== undefined) {
-      vat_type = vat_type === 'non-vat' ? 'non-vat' : 'vat';
-    }
-
-    // Insert product
-    let query = `INSERT INTO products (product_name, category_id, price, vat_type, created_by, branch_id, approval_status) VALUES (?, ?, ?, ?, ?, ?, 'PENDING')`;
-    const params = [product_name, category_id, price, vat_type, created_by, branch_id];
-
-    if (req.file) {
-      query = `INSERT INTO products (product_name, category_id, price, vat_type, image_name, image_path, created_by, branch_id, approval_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`;
-      params.push(req.file.originalname, `/uploads/${req.file.filename}`, created_by, branch_id);
-    }
-
-    const [result] = await connection.query(query, params);
-    const productId = result.insertId;
-
-    // Insert linked ingredients
-    if (ingredients && Array.isArray(ingredients)) {
-      for (const ing of ingredients) {
-        if (ing.id && ing.quantity > 0) {
-          await connection.query(
-            `INSERT INTO menu_inventory (product_id, inventory_id, servings_required) VALUES (?, ?, ?)`,
-            [productId, ing.id, ing.quantity]
-          );
-        }
-      }
-    }
-
-    await connection.commit();
-
-    // Log the menu item creation
-    await logMenuActivity({
-      userId: created_by,
-      branchId: branch_id,
-      activityType: 'menu_item_created',
-      description: `Created menu item: ${product_name}`,
-      referenceId: productId
-    });
-
-    res.status(201).json({ message: "Product created successfully", product_id: productId });
-  } catch (err) {
-    await connection.rollback();
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  } finally {
-    connection.release();
-  }
-};
 export const getBranchMenuProducts = async (req, res) => {
   try {
     const branchId = req.user?.branch_id;
@@ -606,9 +534,8 @@ export const getBranchMenuProducts = async (req, res) => {
        WHERE p.approval_status = 'APPROVED'
          AND p.menu_status = 'active'
          AND p.status = 'available'
-         AND (p.branch_id = 0 OR p.branch_id = ?)
        ORDER BY p.product_name`,
-      [branchId, branchId]
+      [branchId]
     );
 
     res.json(rows);
