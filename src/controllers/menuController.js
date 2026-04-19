@@ -119,7 +119,7 @@ export const getArchivedProducts = async (req, res) => {
 // -------------------
 // CREATE product
 // -------------------
-export const createProduct = async (req, res) => {
+/*export const createProduct = async (req, res) => {
   const connection = await db.getConnection();
   
   try {
@@ -194,7 +194,7 @@ export const createProduct = async (req, res) => {
   } finally {
     connection.release();
   }
-};
+};*/
 
 
 // -------------------
