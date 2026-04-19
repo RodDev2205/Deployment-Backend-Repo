@@ -81,14 +81,17 @@ export const voidTransaction = async (req, res) => {
     // restore inventory and update transaction_items: mark voided items as void, decrement quantities
     for (const item of itemsToVoid) {
       const [ingredients] = await connection.query(
-        `SELECT inventory_id, servings_required FROM menu_inventory WHERE product_id = ?`,
+        `SELECT mi.servings_required, i.ingredient_id, i.item_name
+         FROM menu_inventory mi
+         JOIN ingredients i ON mi.ingredient_id = i.ingredient_id
+         WHERE mi.product_id = ?`,
         [item.menu_id]
       );
       for (const ing of ingredients) {
         const restoreAmount = ing.servings_required * item.void_qty;
         await connection.query(
-          `UPDATE inventory SET total_servings = total_servings + ? WHERE inventory_id = ?`,
-          [restoreAmount, ing.inventory_id]
+          `UPDATE inventory SET total_servings = total_servings + ? WHERE item_name = ? AND branch_id = ?`,
+          [restoreAmount, ing.item_name, branch_id]
         );
       }
       
