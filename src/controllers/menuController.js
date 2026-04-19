@@ -126,7 +126,7 @@ export const createProduct = async (req, res) => {
   try {
     await connection.beginTransaction();
 
-    if (!req.user?.user_id || !req.user?.branch_id) {
+    if (!req.user?.user_id || (req.user.role_id !== 3 && !req.user?.branch_id)) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
