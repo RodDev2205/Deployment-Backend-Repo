@@ -89,7 +89,7 @@ export const completeSale = async (req, res) => {
 
       // Get linked ingredients
       const [ingredientRows] = await connection.query(
-        `SELECT inventory_id, servings_required FROM menu_inventory WHERE product_id = ?`,
+        `SELECT ingredient_id, servings_required FROM menu_inventory WHERE product_id = ?`,
         [item.product_id]
       );
 
@@ -104,7 +104,7 @@ export const completeSale = async (req, res) => {
       // Collect ingredient deductions
       for (const ingredient of ingredientRows) {
         const servingsNeeded = ingredient.servings_required * item.qty;
-        const key = ingredient.inventory_id;
+        const key = ingredient.ingredient_id;
 
         ingredientDeductions.set(
           key,
@@ -114,27 +114,30 @@ export const completeSale = async (req, res) => {
     }
 
     // ==================== STEP 2: Check inventory ====================
-    for (const [inventoryId, servingsNeeded] of ingredientDeductions) {
+    for (const [ingredientId, servingsNeeded] of ingredientDeductions) {
       const [inventoryRows] = await connection.query(
-        `SELECT item_name, total_servings FROM inventory WHERE inventory_id = ?`,
-        [inventoryId]
+        `SELECT bi.stock_units, i.servings_per_unit, i.item_name
+         FROM branch_inventory bi
+         JOIN ingredients i ON bi.ingredient_id = i.ingredient_id
+         WHERE bi.ingredient_id = ? AND bi.branch_id = ?`,
+        [ingredientId, user.branch_id]
       );
 
       if (!inventoryRows.length) {
         await connection.rollback();
         return res.status(400).json({
           success: false,
-          message: `Inventory item not found for ID: ${inventoryId}`,
+          message: `Ingredient not found in branch inventory. Please add the ingredient to your branch.`,
         });
       }
 
-      const inventory = inventoryRows[0];
+      const availableServings = inventoryRows[0].stock_units * inventoryRows[0].servings_per_unit;
 
-      if (inventory.total_servings < servingsNeeded) {
+      if (availableServings < servingsNeeded) {
         await connection.rollback();
         return res.status(400).json({
           success: false,
-          message: `Insufficient stock for "${inventory.item_name}". Available: ${inventory.total_servings}, Needed: ${servingsNeeded}`,
+          message: `Insufficient stock for "${inventoryRows[0].item_name}". Available: ${availableServings}, Needed: ${servingsNeeded}`,
         });
       }
     }
@@ -169,32 +172,28 @@ export const completeSale = async (req, res) => {
     }
 
     // ==================== STEP 4: Deduct servings and update quantity ====================
-    for (const [inventoryId, servingsNeeded] of ingredientDeductions) {
-      // Deduct servings
-      await connection.query(
-        `UPDATE inventory 
-         SET total_servings = total_servings - ? 
-         WHERE inventory_id = ?`,
-        [servingsNeeded, inventoryId]
-      );
-
-      // Recompute quantity based on units
+    for (const [ingredientId, servingsNeeded] of ingredientDeductions) {
+      // Get current stock and servings per unit
       const [[row]] = await connection.query(
-        `SELECT quantity, servings_per_unit, total_servings, low_stock_threshold FROM inventory WHERE inventory_id = ?`,
-        [inventoryId]
+        `SELECT bi.stock_units, i.servings_per_unit, i.low_stock_threshold
+         FROM branch_inventory bi
+         JOIN ingredients i ON bi.ingredient_id = i.ingredient_id
+         WHERE bi.ingredient_id = ? AND bi.branch_id = ?`,
+        [ingredientId, user.branch_id]
       );
 
-      if (row) {
-        const { servings_per_unit, total_servings, low_stock_threshold } = row;
-        const newQty = Math.floor(total_servings / servings_per_unit);
+      if (!row) continue;
 
-        // Determine status: out_of_stock (0), low_stock (<= threshold), otherwise available
-        let newStatus = 'available';
-        if (newQty <= 0) newStatus = 'out_of_stock';
-        else if (low_stock_threshold != null && newQty <= Number(low_stock_threshold)) newStatus = 'low_stock';
+      const { stock_units, servings_per_unit, low_stock_threshold } = row;
+      const servingsToDeduct = servingsNeeded;
+      const unitsToDeduct = servingsToDeduct / servings_per_unit;
+      const newStockUnits = Math.max(0, stock_units - unitsToDeduct);
 
-        await connection.query(
-          `UPDATE inventory SET quantity = ?, status = ? WHERE inventory_id = ?`,
+      // Update stock_units
+      await connection.query(
+        `UPDATE branch_inventory SET stock_units = ? WHERE ingredient_id = ? AND branch_id = ?`,
+        [newStockUnits, ingredientId, user.branch_id]
+      );
           [newQty, newStatus, inventoryId]
         );
       }
@@ -584,7 +583,7 @@ export const voidTransaction = async (req, res) => {
 
       // Get ingredients for this product
       const [ingredientRows] = await connection.query(
-        `SELECT inventory_id, servings_required FROM menu_inventory WHERE product_id = ?`,
+        `SELECT ingredient_id, servings_required FROM menu_inventory WHERE product_id = ?`,
         [item.menu_id]
       );
 
@@ -592,30 +591,24 @@ export const voidTransaction = async (req, res) => {
       for (const ingredient of ingredientRows) {
         const servingsToRestore = ingredient.servings_required * voidQty;
 
-        // Restore servings
-        await connection.query(
-          `UPDATE inventory SET total_servings = total_servings + ? WHERE inventory_id = ?`,
-          [servingsToRestore, ingredient.inventory_id]
+        // Get current stock and servings per unit
+        const [[row]] = await connection.query(
+          `SELECT bi.stock_units, i.servings_per_unit
+           FROM branch_inventory bi
+           JOIN ingredients i ON bi.ingredient_id = i.ingredient_id
+           WHERE bi.ingredient_id = ? AND bi.branch_id = ?`,
+          [ingredient.ingredient_id, user.branch_id]
         );
 
-        // Recompute quantity
-        const [[inventoryRow]] = await connection.query(
-          `SELECT quantity, servings_per_unit, total_servings, low_stock_threshold FROM inventory WHERE inventory_id = ?`,
-          [ingredient.inventory_id]
-        );
+        if (row) {
+          const { stock_units, servings_per_unit } = row;
+          const unitsToRestore = servingsToRestore / servings_per_unit;
+          const newStockUnits = stock_units + unitsToRestore;
 
-        if (inventoryRow) {
-          const { servings_per_unit, total_servings, low_stock_threshold } = inventoryRow;
-          const newQty = Math.floor(total_servings / servings_per_unit);
-
-          // Determine status
-          let newStatus = 'available';
-          if (newQty <= 0) newStatus = 'out_of_stock';
-          else if (low_stock_threshold != null && newQty <= Number(low_stock_threshold)) newStatus = 'low_stock';
-
+          // Update stock_units
           await connection.query(
-            `UPDATE inventory SET quantity = ?, status = ? WHERE inventory_id = ?`,
-            [newQty, newStatus, ingredient.inventory_id]
+            `UPDATE branch_inventory SET stock_units = ? WHERE ingredient_id = ? AND branch_id = ?`,
+            [newStockUnits, ingredient.ingredient_id, user.branch_id]
           );
         }
       }

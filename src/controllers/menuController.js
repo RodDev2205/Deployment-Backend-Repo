@@ -132,10 +132,13 @@ export const createProduct = async (req, res) => {
     let { product_name, category_id, price, ingredients, vat_type = 'vat' } = req.body;
     const created_by = req.user.user_id;
     const branch_id = req.user.branch_id;
+    const role_id = req.user.role_id;
 
     if (vat_type !== 'non-vat') {
       vat_type = 'vat';
     }
+
+    const approvalStatus = role_id === 3 ? 'APPROVED' : 'PENDING';
 
     // Parse ingredients if it comes as a JSON string (from FormData)
     if (typeof ingredients === 'string') {
@@ -154,7 +157,7 @@ export const createProduct = async (req, res) => {
       `INSERT INTO products 
       (product_name, category_id, price, image_name, image_path, created_by, branch_id, approval_status, vat_type)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [product_name, category_id, price, image_name, image_path, created_by, branch_id, 'PENDING', vat_type]
+      [product_name, category_id, price, image_name, image_path, created_by, branch_id, approvalStatus, vat_type]
     );
 
     const productId = result.insertId;
@@ -164,7 +167,7 @@ export const createProduct = async (req, res) => {
       for (const ing of ingredients) {
         await connection.query(
           `INSERT INTO menu_inventory 
-          (product_id, inventory_id, servings_required)
+          (product_id, ingredient_id, servings_required)
           VALUES (?, ?, ?)`,
           [productId, ing.id, ing.quantity]
         );
@@ -267,7 +270,7 @@ export const updateProduct = async (req, res) => {
       if (ingredients.length > 0) {
         for (const ing of ingredients) {
           await connection.query(
-            `INSERT INTO menu_inventory (product_id, inventory_id, servings_required) VALUES (?, ?, ?)`,
+            `INSERT INTO menu_inventory (product_id, ingredient_id, servings_required) VALUES (?, ?, ?)`,
             [id, ing.id, ing.quantity]
           );
         }
@@ -445,7 +448,7 @@ export const editDeclinedProduct = async (req, res) => {
       if (ingredients.length > 0) {
         for (const ing of ingredients) {
           await connection.query(
-            `INSERT INTO menu_inventory (product_id, inventory_id, servings_required) VALUES (?, ?, ?)`,
+            `INSERT INTO menu_inventory (product_id, ingredient_id, servings_required) VALUES (?, ?, ?)`,
             [id, ing.id, ing.quantity]
           );
         }
@@ -498,9 +501,9 @@ export const getMenuInventoryByProduct = async (req, res) => {
     }
 
     const [rows] = await db.query(
-      `SELECT mi.product_id, mi.inventory_id, mi.servings_required, i.item_name, i.quantity, i.total_servings
+      `SELECT mi.product_id, mi.ingredient_id, mi.servings_required, i.item_name, i.quantity_per_unit, i.servings_per_unit
        FROM menu_inventory mi
-       JOIN inventory i ON mi.inventory_id = i.inventory_id
+       JOIN ingredients i ON mi.ingredient_id = i.ingredient_id
        WHERE mi.product_id = ?`,
       [product_id]
     );

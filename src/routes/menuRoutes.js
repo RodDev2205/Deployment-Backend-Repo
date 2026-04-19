@@ -21,7 +21,7 @@ router.get("/archived", verifyToken, requireRole(2, 1), getArchivedProducts);
 router.get("/branch-menu", verifyToken, requireRole(2, 1), getBranchMenuProducts);
 router.post("/branch-menu", verifyToken, requireRole(2, 1), saveBranchMenuSelection);
 router.get("/:product_id/inventory", verifyToken, requireRole(2, 1), getMenuInventoryByProduct);
-router.post("/", verifyToken, requireRole(2, 1), upload.single("image"), createProduct);
+router.post("/", verifyToken, requireRole(2, 1, 3), upload.single("image"), createProduct);
 router.put("/:id", verifyToken, requireRole(2, 1), upload.single("image"), updateProduct);
 router.delete("/:id", verifyToken, requireRole(2, 1), deleteProduct);
 router.get("/declined", verifyToken, requireRole(2), getDeclinedProducts);

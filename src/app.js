@@ -21,6 +21,8 @@ import salesAdminRoutes from "./routes/salesAdminRoutes.js"; // <-- import sales
 import salesSuperAdminRoutes from "./routes/salesSuperAdminRoutes.js"; // <-- import sales superadmin routes
 import inventoryRoutes from "./routes/inventoryRoutes.js"; // <-- import inventory routes 
 import feedbackRoutes from "./routes/feedbackRoutes.js"; // <-- import feedback route
+import globalIngredientsRoutes from "./routes/globalIngredientsRoutes.js";
+import branchInventoryRoutes from "./routes/branchInventoryRoutes.js";
 
 dotenv.config();
 
@@ -62,6 +64,8 @@ app.use("/api/sales-admin", salesAdminRoutes); // <-- register sales admin route
 app.use("/api/sales-superadmin", salesSuperAdminRoutes); // register sales superadmin routes
 app.use("/api/activity-logs", activityRoutes);
 app.use("/api/feedback", feedbackRoutes);
+app.use("/api/global-ingredients", globalIngredientsRoutes);
+app.use("/api/branch-inventory", branchInventoryRoutes);
 // Print route
 
 app.post("/api/print-receipt", async (req, res) => {
