@@ -89,10 +89,10 @@ export const getMenuInventorybyid = async (req, res) => {
         mi.inventory_id,
         mi.servings_required,
         i.item_name,
-        i.quantity,
-        i.total_servings
+        i.quantity_per_unit,
+        i.servings_per_unit
        FROM menu_inventory mi
-       JOIN inventory i ON mi.inventory_id = i.inventory_id
+       JOIN ingredients i ON mi.inventory_id = i.ingredient_id
        WHERE mi.product_id = ?`,
       [product_id]
     );

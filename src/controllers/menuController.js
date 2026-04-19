@@ -270,7 +270,7 @@ export const updateProduct = async (req, res) => {
       if (ingredients.length > 0) {
         for (const ing of ingredients) {
           await connection.query(
-            `INSERT INTO menu_inventory (product_id, ingredient_id, servings_required) VALUES (?, ?, ?)`,
+            `INSERT INTO menu_inventory (product_id, inventory_id, servings_required) VALUES (?, ?, ?)`,
             [id, ing.id, ing.quantity]
           );
         }
@@ -448,7 +448,7 @@ export const editDeclinedProduct = async (req, res) => {
       if (ingredients.length > 0) {
         for (const ing of ingredients) {
           await connection.query(
-            `INSERT INTO menu_inventory (product_id, ingredient_id, servings_required) VALUES (?, ?, ?)`,
+            `INSERT INTO menu_inventory (product_id, inventory_id, servings_required) VALUES (?, ?, ?)`,
             [id, ing.id, ing.quantity]
           );
         }
@@ -501,9 +501,9 @@ export const getMenuInventoryByProduct = async (req, res) => {
     }
 
     const [rows] = await db.query(
-      `SELECT mi.product_id, mi.ingredient_id, mi.servings_required, i.item_name, i.quantity_per_unit, i.servings_per_unit
+      `SELECT mi.product_id, mi.inventory_id, mi.servings_required, i.item_name, i.quantity_per_unit, i.servings_per_unit
        FROM menu_inventory mi
-       JOIN ingredients i ON mi.ingredient_id = i.ingredient_id
+       JOIN ingredients i ON mi.inventory_id = i.ingredient_id
        WHERE mi.product_id = ?`,
       [product_id]
     );
@@ -516,8 +516,75 @@ export const getMenuInventoryByProduct = async (req, res) => {
 };
 
 // -------------------
-// Branch menu selection for branch admins
+// CREATE product
 // -------------------
+export const createProduct = async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    let { product_name, category_id, price, vat_type, ingredients } = req.body;
+    const created_by = req.user.user_id;
+    const branch_id = req.user.branch_id;
+
+    // Parse ingredients if sent as JSON string (FormData)
+    if (typeof ingredients === 'string') {
+      try {
+        ingredients = JSON.parse(ingredients);
+      } catch (e) {
+        ingredients = [];
+      }
+    }
+
+    // Normalize vat_type values
+    if (vat_type !== undefined) {
+      vat_type = vat_type === 'non-vat' ? 'non-vat' : 'vat';
+    }
+
+    // Insert product
+    let query = `INSERT INTO products (product_name, category_id, price, vat_type, created_by, branch_id, approval_status) VALUES (?, ?, ?, ?, ?, ?, 'PENDING')`;
+    const params = [product_name, category_id, price, vat_type, created_by, branch_id];
+
+    if (req.file) {
+      query = `INSERT INTO products (product_name, category_id, price, vat_type, image_name, image_path, created_by, branch_id, approval_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`;
+      params.push(req.file.originalname, `/uploads/${req.file.filename}`, created_by, branch_id);
+    }
+
+    const [result] = await connection.query(query, params);
+    const productId = result.insertId;
+
+    // Insert linked ingredients
+    if (ingredients && Array.isArray(ingredients)) {
+      for (const ing of ingredients) {
+        if (ing.id && ing.quantity > 0) {
+          await connection.query(
+            `INSERT INTO menu_inventory (product_id, inventory_id, servings_required) VALUES (?, ?, ?)`,
+            [productId, ing.id, ing.quantity]
+          );
+        }
+      }
+    }
+
+    await connection.commit();
+
+    // Log the menu item creation
+    await logMenuActivity({
+      userId: created_by,
+      branchId: branch_id,
+      activityType: 'menu_item_created',
+      description: `Created menu item: ${product_name}`,
+      referenceId: productId
+    });
+
+    res.status(201).json({ message: "Product created successfully", product_id: productId });
+  } catch (err) {
+    await connection.rollback();
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    connection.release();
+  }
+};
 export const getBranchMenuProducts = async (req, res) => {
   try {
     const branchId = req.user?.branch_id;

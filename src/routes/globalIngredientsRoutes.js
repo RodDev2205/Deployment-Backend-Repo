@@ -13,9 +13,9 @@ const router = Router();
 // All routes require authentication
 router.use(verifyToken);
 
-// Superadmin only routes
+// Superadmin-only create/update/delete routes
 router.post('/', requireRole(3), createGlobalIngredient);
-router.get('/', requireRole(3), getAllGlobalIngredients);
+router.get('/', requireRole(2, 3), getAllGlobalIngredients);
 router.put('/:id', requireRole(3), updateGlobalIngredient);
 router.delete('/:id', requireRole(3), deleteGlobalIngredient);
 
