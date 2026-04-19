@@ -194,9 +194,6 @@ export const completeSale = async (req, res) => {
         `UPDATE branch_inventory SET stock_units = ? WHERE ingredient_id = ? AND branch_id = ?`,
         [newStockUnits, ingredientId, user.branch_id]
       );
-          [newQty, newStatus, inventoryId]
-        );
-      }
     }
 
     // ==================== STEP 5: Create transaction ====================
