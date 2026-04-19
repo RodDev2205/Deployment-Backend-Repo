@@ -24,20 +24,32 @@ CREATE TABLE IF NOT EXISTS branch_inventory (
   FOREIGN KEY (ingredient_id) REFERENCES ingredients(ingredient_id) ON DELETE CASCADE
 );
 
--- 3. Update menu_inventory to reference global ingredients
--- First, backup old data if needed
--- ALTER TABLE menu_inventory ADD COLUMN ingredient_id INT AFTER inventory_id;
+-- Migration to update existing menu_inventory table to use ingredient_id
+-- Run this after backing up your database
 
--- If menu_inventory doesn't exist, create it
-CREATE TABLE IF NOT EXISTS menu_inventory (
-  menu_inventory_id INT AUTO_INCREMENT PRIMARY KEY,
-  product_id INT NOT NULL,
-  ingredient_id INT NOT NULL,
-  servings_required DECIMAL(10,2) NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE,
-  FOREIGN KEY (ingredient_id) REFERENCES ingredients(ingredient_id) ON DELETE CASCADE
+-- 1. Add ingredient_id column to existing menu_inventory
+ALTER TABLE menu_inventory ADD COLUMN ingredient_id INT AFTER product_id;
+
+-- 2. Migrate data: populate ingredient_id from inventory table
+UPDATE menu_inventory mi
+JOIN inventory i ON mi.inventory_id = i.inventory_id
+SET mi.ingredient_id = (
+  SELECT ing.ingredient_id
+  FROM ingredients ing
+  WHERE ing.item_name COLLATE utf8mb4_general_ci = i.item_name COLLATE utf8mb4_general_ci
+  LIMIT 1
 );
+
+-- 3. Add foreign key constraint
+ALTER TABLE menu_inventory
+ADD CONSTRAINT fk_menu_inventory_ingredient
+FOREIGN KEY (ingredient_id) REFERENCES ingredients(ingredient_id) ON DELETE CASCADE;
+
+-- 4. Drop old inventory_id column (after verifying data migration)
+-- ALTER TABLE menu_inventory DROP COLUMN inventory_id;
+
+-- 5. Update servings_required to DECIMAL if needed
+ALTER TABLE menu_inventory MODIFY COLUMN servings_required DECIMAL(10,2) NOT NULL;
 
 -- 4. Migrate data from old inventory to new structure (if applicable)
 -- This assumes old inventory table has branch-specific data
@@ -49,13 +61,6 @@ CREATE TABLE IF NOT EXISTS menu_inventory (
 -- SELECT i.branch_id, ing.ingredient_id, i.quantity
 -- FROM inventory i
 -- JOIN ingredients ing ON i.item_name = ing.item_name;
-
--- Update menu_inventory to use ingredient_id
--- UPDATE menu_inventory mi
--- JOIN inventory i ON mi.inventory_id = i.inventory_id
--- JOIN ingredients ing ON i.item_name = ing.item_name
--- SET mi.ingredient_id = ing.ingredient_id
--- WHERE mi.ingredient_id IS NULL;
 
 -- After migration, you can drop old inventory table if no longer needed
 -- DROP TABLE inventory;
