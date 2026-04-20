@@ -59,8 +59,7 @@ export const getAllProducts = async (req, res) => {
        LEFT JOIN branch_menu bm ON bm.product_id = p.product_id AND bm.branch_id = ?
        WHERE (
          p.branch_id = ?
-         OR p.branch_id IS NULL
-         OR (bm.branch_menu_id IS NOT NULL AND bm.is_available = 1)
+         OR (p.branch_id IS NULL AND bm.branch_menu_id IS NOT NULL AND bm.is_available = 1)
        )`;
     const params = [userBranchId, userBranchId];
 
