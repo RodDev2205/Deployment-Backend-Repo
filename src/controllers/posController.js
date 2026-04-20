@@ -1,4 +1,5 @@
 import { db } from "../config/db.js";
+import { calculateSeniorPWDDiscount, validateCartForDiscount } from "../utils/discountCalculator.js";
 // import { io } from "../../server.js"; // moved to dynamic import to avoid circular dependency
 
 // NOTE: Ensure your database schema includes an `order_type` column in transactions,
@@ -737,6 +738,61 @@ export const voidTransaction = async (req, res) => {
   } finally {
     connection.release();
   }
+};
+
+/**
+ * Calculate Senior/PWD discount with per-item discount quantity
+ * POST /api/pos/calculate-senior-pwd-discount
+ * 
+ * Request body:
+ * {
+ *   cart: [
+ *     {
+ *       product_id: number,
+ *       name: string,
+ *       price: number (VAT-inclusive),
+ *       qty: number,
+ *       discountQty: number (units to apply discount)
+ *     }
+ *   ]
+ * }
+ * 
+ * Returns discount breakdown with ₱250 cap
+ */
+export const calculateSeniorPWDDiscountAPI = async (req, res) => {
+  const { cart } = req.body;
+
+  // Validate input
+  if (!cart || !Array.isArray(cart) || cart.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'Cart must be a non-empty array'
+    });
+  }
+
+  // Validate cart before processing
+  const validation = await validateCartForDiscount(cart);
+  if (!validation.valid) {
+    return res.status(400).json({
+      success: false,
+      message: validation.message
+    });
+  }
+
+  // Calculate discount
+  const result = await calculateSeniorPWDDiscount(cart);
+
+  if (!result.success) {
+    return res.status(400).json({
+      success: false,
+      message: result.error
+    });
+  }
+
+  res.json({
+    success: true,
+    data: result
+  });
 };
 
 /**

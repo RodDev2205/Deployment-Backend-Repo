@@ -1,5 +1,5 @@
 import express from "express";
-import { completeSale, getUserTransactions, getTransactionDetails, testDeductInventory } from "../controllers/posController.js";
+import { completeSale, getUserTransactions, getTransactionDetails, testDeductInventory, calculateSeniorPWDDiscountAPI } from "../controllers/posController.js";
 import { voidTransaction } from "../controllers/voidController.js";
 import { refundTransaction } from "../controllers/refundController.js";
 import { verifyToken } from "../middlewares/verifyToken.js";
@@ -23,5 +23,8 @@ router.post("/refund", verifyToken, refundTransaction);
 
 // POST /api/pos/deduct-inventory - test inventory deduction for a product order
 router.post("/deduct-inventory", verifyToken, testDeductInventory);
+
+// POST /api/pos/calculate-senior-pwd-discount - calculate Senior/PWD discount with per-item discount qty
+router.post("/calculate-senior-pwd-discount", calculateSeniorPWDDiscountAPI);
 
 export default router;
