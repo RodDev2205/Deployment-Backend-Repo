@@ -72,7 +72,7 @@ export const deductInventoryForOrder = async (productId, quantityOrdered, branch
       }
 
       const inventory = inventoryRows[0];
-      const availableServings = inventory.quantity * inventory.servings_per_unit;
+      const availableServings = inventory.total_servings;
 
       if (availableServings < requiredServings) {
         throw new Error(`Insufficient stock for "${inventory.item_name}". Available: ${availableServings}, Required: ${requiredServings}`);
@@ -85,7 +85,7 @@ export const deductInventoryForOrder = async (productId, quantityOrdered, branch
         servingsPerUnit: inventory.servings_per_unit,
         lowStockThreshold: inventory.low_stock_threshold,
         requiredServings: requiredServings,
-        unitsToDeduct: Math.ceil(requiredServings / inventory.servings_per_unit) // Round up to ensure sufficient deduction
+        servingsDeducted: requiredServings
       });
     }
 
@@ -93,15 +93,21 @@ export const deductInventoryForOrder = async (productId, quantityOrdered, branch
     const deductionResults = [];
 
     for (const validation of ingredientValidations) {
-      const newQuantity = Math.max(0, validation.currentQuantity - validation.unitsToDeduct);
-      const servingsDeducted = validation.unitsToDeduct * validation.servingsPerUnit;
+      // servingsDeducted is already calculated in validation
+      const servingsDeducted = validation.servingsDeducted;
+
+      // Calculate units to deduct based on servings consumed
+      const unitsToDeduct = Math.floor(servingsDeducted / validation.servingsPerUnit);
+
+      // Update quantity and total servings
+      const newQuantity = Math.max(0, validation.currentQuantity - unitsToDeduct);
       const newTotalServings = Math.max(0, (validation.currentQuantity * validation.servingsPerUnit) - servingsDeducted);
 
-      // Determine new status
+      // Determine new status based on total servings
       let newStatus;
-      if (newQuantity <= 0) {
+      if (newTotalServings <= 0) {
         newStatus = 'out_of_stock';
-      } else if (newQuantity <= validation.lowStockThreshold) {
+      } else if (newTotalServings <= validation.lowStockThreshold * validation.servingsPerUnit) {
         newStatus = 'low_stock';
       } else {
         newStatus = 'available';
@@ -119,9 +125,11 @@ export const deductInventoryForOrder = async (productId, quantityOrdered, branch
         inventoryId: validation.inventoryId,
         itemName: validation.itemName,
         previousQuantity: validation.currentQuantity,
+        previousTotalServings: validation.currentQuantity * validation.servingsPerUnit,
         newQuantity: newQuantity,
-        unitsDeducted: validation.unitsToDeduct,
+        newTotalServings: newTotalServings,
         servingsDeducted: servingsDeducted,
+        unitsDeducted: unitsToDeduct,
         newStatus: newStatus
       });
     }
