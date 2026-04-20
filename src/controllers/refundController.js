@@ -72,9 +72,9 @@ export const refundTransaction = async (req, res) => {
     // restore inventory for each refunded item
     for (const item of itemsToRefund) {
       const [ingredients] = await connection.query(
-        `SELECT mi.servings_required, i.ingredient_id, i.item_name
+        `SELECT mi.servings_required, inv.inventory_id as ingredient_id, inv.item_name
          FROM menu_inventory mi
-         JOIN ingredients i ON mi.ingredient_id = i.ingredient_id
+         JOIN inventory inv ON mi.ingredient_id = inv.inventory_id
          WHERE mi.product_id = ?`,
         [item.menu_id]
       );

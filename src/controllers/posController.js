@@ -116,10 +116,9 @@ export const completeSale = async (req, res) => {
     // ==================== STEP 2: Check inventory ====================
     for (const [ingredientId, servingsNeeded] of ingredientDeductions) {
       const [inventoryRows] = await connection.query(
-        `SELECT bi.stock_units, i.servings_per_unit, i.item_name
-         FROM branch_inventory bi
-         JOIN ingredients i ON bi.ingredient_id = i.ingredient_id
-         WHERE bi.ingredient_id = ? AND bi.branch_id = ?`,
+        `SELECT inv.quantity as stock_units, inv.servings_per_unit, inv.item_name
+         FROM inventory inv
+         WHERE inv.inventory_id = ? AND inv.branch_id = ?`,
         [ingredientId, user.branch_id]
       );
 
@@ -590,10 +589,9 @@ export const voidTransaction = async (req, res) => {
 
         // Get current stock and servings per unit
         const [[row]] = await connection.query(
-          `SELECT bi.stock_units, i.servings_per_unit
-           FROM branch_inventory bi
-           JOIN ingredients i ON bi.ingredient_id = i.ingredient_id
-           WHERE bi.ingredient_id = ? AND bi.branch_id = ?`,
+          `SELECT inv.quantity as stock_units, inv.servings_per_unit
+           FROM inventory inv
+           WHERE inv.inventory_id = ? AND inv.branch_id = ?`,
           [ingredient.ingredient_id, user.branch_id]
         );
 
@@ -602,9 +600,9 @@ export const voidTransaction = async (req, res) => {
           const unitsToRestore = servingsToRestore / servings_per_unit;
           const newStockUnits = stock_units + unitsToRestore;
 
-          // Update stock_units
+          // Update quantity
           await connection.query(
-            `UPDATE branch_inventory SET stock_units = ? WHERE ingredient_id = ? AND branch_id = ?`,
+            `UPDATE inventory SET quantity = ? WHERE inventory_id = ? AND branch_id = ?`,
             [newStockUnits, ingredient.ingredient_id, user.branch_id]
           );
         }

@@ -504,18 +504,11 @@ export const getMenuInventoryByProduct = async (req, res) => {
       return res.status(403).json({ message: "Forbidden" });
     }
 
-    let query = `SELECT mi.product_id, mi.ingredient_id, mi.servings_required, i.item_name, i.quantity_per_unit, i.servings_per_unit
+    const query = `SELECT mi.product_id, mi.ingredient_id, mi.servings_required, inv.item_name, inv.servings_per_unit
        FROM menu_inventory mi
-       JOIN ingredients i ON mi.ingredient_id = i.ingredient_id`;
-    const params = [product_id];
-
-    if (req.user && req.user.branch_id) {
-      query += `
-       JOIN branch_inventory bi ON mi.ingredient_id = bi.ingredient_id AND bi.branch_id = ?`;
-      params.unshift(req.user.branch_id);
-    }
-
-    query += ` WHERE mi.product_id = ?`;
+       JOIN inventory inv ON mi.ingredient_id = inv.inventory_id
+       WHERE mi.product_id = ? AND inv.branch_id = ?`;
+    const params = [product_id, req.user.branch_id];
 
     const [rows] = await db.query(query, params);
 
