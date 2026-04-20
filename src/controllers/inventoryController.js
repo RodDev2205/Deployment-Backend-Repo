@@ -21,8 +21,17 @@ export const addIngredient = async (req, res) => {
     console.log("REQ.USER:", req.user);
     console.log("REQ.BODY:", req.body);
 
-    const { item_name, quantity, servings_per_unit, low_stock_threshold, status } = req.body;
-    const branch_id = req.user.branch_id;
+    const { item_name, quantity, servings_per_unit, low_stock_threshold, status, branch_id: requestedBranchId } = req.body;
+
+    let branch_id;
+    if (req.user.role_id === 3) {
+      branch_id = Number(requestedBranchId);
+      if (!requestedBranchId || isNaN(branch_id) || branch_id <= 0) {
+        return res.status(400).json({ message: "branch_id is required for superadmin" });
+      }
+    } else {
+      branch_id = req.user.branch_id;
+    }
 
     const total_servings = quantity * servings_per_unit;
 
