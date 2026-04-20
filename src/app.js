@@ -83,6 +83,57 @@ app.post("/api/print-receipt", async (req, res) => {
     console.error(err);
     res.status(500).json({ success: false, message: err.message });
   }
+// Temporary migration endpoint
+app.post("/api/migrate-menu-inventory-fk", async (req, res) => {
+  try {
+    console.log('🔄 Running menu_inventory foreign key migration...');
+
+    // Check current constraints
+    const [constraints] = await db.query(
+      `SELECT CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
+       FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+       WHERE TABLE_NAME = 'menu_inventory' AND REFERENCED_TABLE_NAME IS NOT NULL`
+    );
+
+    console.log('Current constraints:', constraints);
+
+    // Drop old constraint
+    try {
+      await db.query('ALTER TABLE menu_inventory DROP FOREIGN KEY fk_menu_inventory_ingredient');
+      console.log('✅ Old constraint dropped');
+    } catch (err) {
+      if (err.code === 'ER_CANT_DROP_FIELD_OR_KEY') {
+        console.log('⚠️  Constraint not found, continuing...');
+      } else {
+        throw err;
+      }
+    }
+
+    // Add new constraint
+    await db.query(`
+      ALTER TABLE menu_inventory
+      ADD CONSTRAINT fk_menu_inventory_inventory
+      FOREIGN KEY (ingredient_id) REFERENCES inventory(inventory_id) ON DELETE CASCADE
+    `);
+    console.log('✅ New constraint added');
+
+    // Verify
+    const [newConstraints] = await db.query(
+      `SELECT CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
+       FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+       WHERE TABLE_NAME = 'menu_inventory' AND REFERENCED_TABLE_NAME IS NOT NULL`
+    );
+
+    res.json({
+      success: true,
+      message: 'Migration completed successfully',
+      oldConstraints: constraints,
+      newConstraints: newConstraints
+    });
+  } catch (err) {
+    console.error('❌ Migration error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 export default app;

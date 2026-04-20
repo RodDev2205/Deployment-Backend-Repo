@@ -3,9 +3,9 @@ import fs from 'fs';
 
 async function runMigration() {
   try {
-    console.log('Running tax columns migration...');
+    console.log('Running menu_inventory foreign key update migration...');
 
-    const sql = fs.readFileSync('add-tax-columns-to-transactions.sql', 'utf8');
+    const sql = fs.readFileSync('update-menu-inventory-fk.sql', 'utf8');
 
     // Split SQL commands and execute them
     const commands = sql.split(';').filter(cmd => cmd.trim().length > 0);
