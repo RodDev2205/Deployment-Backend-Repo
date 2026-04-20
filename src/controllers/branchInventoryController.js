@@ -19,23 +19,16 @@ async function logBranchInventoryActivity({ userId, branchId, activityType, desc
 // -------------------
 export const addIngredientToBranch = async (req, res) => {
   try {
-    const { ingredient_id, stock_units } = req.body;
+    const { item_name, quantity, servings_per_unit, low_stock_threshold } = req.body;
     const branch_id = req.user.branch_id;
     const added_by = req.user.user_id;
 
-    // Check if already exists
-    const [existing] = await db.query(
-      `SELECT inventory_id FROM branch_inventory WHERE branch_id = ? AND ingredient_id = ?`,
-      [branch_id, ingredient_id]
-    );
-
-    if (existing.length > 0) {
-      return res.status(400).json({ error: "Ingredient already added to this branch" });
-    }
+    const total_servings = quantity * servings_per_unit;
+    const status = total_servings === 0 ? 'out_of_stock' : total_servings <= low_stock_threshold ? 'low_stock' : 'available';
 
     const [result] = await db.query(
-      `INSERT INTO branch_inventory (branch_id, ingredient_id, stock_units) VALUES (?, ?, ?)`,
-      [branch_id, ingredient_id, stock_units || 0.00]
+      `INSERT INTO inventory (item_name, quantity, servings_per_unit, total_servings, low_stock_threshold, status, branch_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [item_name, quantity, servings_per_unit, total_servings, low_stock_threshold, status, branch_id]
     );
 
     const inventoryId = result.insertId;
@@ -44,12 +37,12 @@ export const addIngredientToBranch = async (req, res) => {
     await logBranchInventoryActivity({
       userId: added_by,
       branchId: branch_id,
-      activityType: 'branch_ingredient_added',
-      description: `Added ingredient ${ingredient_id} to branch inventory`,
+      activityType: 'inventory_item_added',
+      description: `Added inventory item ${item_name} to branch`,
       referenceId: inventoryId
     });
 
-    res.status(201).json({ message: "Ingredient added to branch inventory", inventory_id: inventoryId });
+    res.status(201).json({ message: "Inventory item added to branch", inventory_id: inventoryId });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -64,20 +57,10 @@ export const getBranchInventory = async (req, res) => {
     const branch_id = req.user.branch_id;
 
     const [rows] = await db.query(`
-      SELECT bi.inventory_id, bi.stock_units, bi.created_at,
-             i.ingredient_id, i.item_name, i.quantity_per_unit, i.servings_per_unit, i.low_stock_threshold,
-             (bi.stock_units * i.servings_per_unit) AS total_servings,
-             CASE
-               WHEN (bi.stock_units * i.servings_per_unit) = 0 THEN 'out_of_stock'
-               WHEN (bi.stock_units * i.servings_per_unit) <= i.low_stock_threshold THEN 'low_stock'
-               ELSE 'available'
-             END AS status,
-             b.branch_name
-      FROM branch_inventory bi
-      JOIN ingredients i ON bi.ingredient_id = i.ingredient_id
-      JOIN branches b ON bi.branch_id = b.branch_id
-      WHERE bi.branch_id = ?
-      ORDER BY i.item_name
+      SELECT inventory_id, item_name, quantity as stock_units, servings_per_unit, total_servings, low_stock_threshold, status
+      FROM inventory
+      WHERE branch_id = ?
+      ORDER BY item_name
     `, [branch_id]);
 
     res.json(rows);
@@ -97,20 +80,34 @@ export const updateBranchStock = async (req, res) => {
     const branch_id = req.user.branch_id;
     const updated_by = req.user.user_id;
 
+    // Get current servings_per_unit and low_stock_threshold
+    const [current] = await db.query(
+      `SELECT servings_per_unit, low_stock_threshold FROM inventory WHERE inventory_id = ? AND branch_id = ?`,
+      [id, branch_id]
+    );
+
+    if (current.length === 0) {
+      return res.status(404).json({ error: "Inventory item not found" });
+    }
+
+    const { servings_per_unit, low_stock_threshold } = current[0];
+    const total_servings = stock_units * servings_per_unit;
+    const status = total_servings === 0 ? 'out_of_stock' : total_servings <= low_stock_threshold ? 'low_stock' : 'available';
+
     const [result] = await db.query(
-      `UPDATE branch_inventory SET stock_units = ? WHERE inventory_id = ? AND branch_id = ?`,
-      [stock_units, id, branch_id]
+      `UPDATE inventory SET quantity = ?, total_servings = ?, status = ? WHERE inventory_id = ? AND branch_id = ?`,
+      [stock_units, total_servings, status, id, branch_id]
     );
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ error: "Branch inventory item not found" });
+      return res.status(404).json({ error: "Inventory item not found" });
     }
 
     // Log activity
     await logBranchInventoryActivity({
       userId: updated_by,
       branchId: branch_id,
-      activityType: 'branch_stock_updated',
+      activityType: 'inventory_stock_updated',
       description: `Updated stock for inventory ID ${id} to ${stock_units} units`,
       referenceId: id
     });
@@ -132,24 +129,24 @@ export const removeIngredientFromBranch = async (req, res) => {
     const removed_by = req.user.user_id;
 
     const [result] = await db.query(
-      `DELETE FROM branch_inventory WHERE inventory_id = ? AND branch_id = ?`,
+      `DELETE FROM inventory WHERE inventory_id = ? AND branch_id = ?`,
       [id, branch_id]
     );
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ error: "Branch inventory item not found" });
+      return res.status(404).json({ error: "Inventory item not found" });
     }
 
     // Log activity
     await logBranchInventoryActivity({
       userId: removed_by,
       branchId: branch_id,
-      activityType: 'branch_ingredient_removed',
-      description: `Removed ingredient from branch inventory ID ${id}`,
+      activityType: 'inventory_item_removed',
+      description: `Removed inventory item from branch ID ${id}`,
       referenceId: id
     });
 
-    res.json({ message: "Ingredient removed from branch inventory" });
+    res.json({ message: "Inventory item removed from branch" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -162,18 +159,10 @@ export const removeIngredientFromBranch = async (req, res) => {
 export const getAllBranchInventories = async (req, res) => {
   try {
     const [rows] = await db.query(`
-      SELECT bi.inventory_id, bi.stock_units, bi.created_at,
-             i.ingredient_id, i.item_name, i.quantity_per_unit, i.servings_per_unit, i.low_stock_threshold,
-             (bi.stock_units * i.servings_per_unit) AS total_servings,
-             CASE
-               WHEN (bi.stock_units * i.servings_per_unit) = 0 THEN 'out_of_stock'
-               WHEN (bi.stock_units * i.servings_per_unit) <= i.low_stock_threshold THEN 'low_stock'
-               ELSE 'available'
-             END AS status,
+      SELECT i.inventory_id, i.item_name, i.quantity as stock_units, i.servings_per_unit, i.total_servings, i.low_stock_threshold, i.status, i.created_at,
              b.branch_name
-      FROM branch_inventory bi
-      JOIN ingredients i ON bi.ingredient_id = i.ingredient_id
-      JOIN branches b ON bi.branch_id = b.branch_id
+      FROM inventory i
+      JOIN branches b ON i.branch_id = b.branch_id
       ORDER BY b.branch_name, i.item_name
     `);
 
