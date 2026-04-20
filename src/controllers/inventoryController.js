@@ -155,7 +155,7 @@ export const getAllInventoryItems = async (req, res) => {
        ORDER BY b.branch_name ASC, i.item_name ASC`
     );
 
-    res.status(200).json(rows);
+    res.status(200).json({ data: rows });
   } catch (error) {
     console.error("DB ERROR:", error);
     res.status(500).json({ message: "Database error", error: error.message });
