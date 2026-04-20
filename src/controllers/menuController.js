@@ -165,11 +165,13 @@ export const createProduct = async (req, res) => {
     // 2️⃣ Insert product ingredients (if any)
     if (ingredients && Array.isArray(ingredients) && ingredients.length > 0) {
       for (const ing of ingredients) {
+        const ingredientId = ing.ingredient_id ?? ing.id ?? ing.ingredientId;
+        if (!ingredientId) continue;
         await connection.query(
           `INSERT INTO menu_inventory 
           (product_id, ingredient_id, servings_required)
           VALUES (?, ?, ?)`,
-          [productId, ing.id, ing.quantity]
+          [productId, ingredientId, ing.quantity]
         );
       }
     }
@@ -269,9 +271,11 @@ export const updateProduct = async (req, res) => {
       await connection.query(`DELETE FROM menu_inventory WHERE product_id=?`, [id]);
       if (ingredients.length > 0) {
         for (const ing of ingredients) {
+          const ingredientId = ing.ingredient_id ?? ing.id ?? ing.ingredientId;
+          if (!ingredientId) continue;
           await connection.query(
             `INSERT INTO menu_inventory (product_id, ingredient_id, servings_required) VALUES (?, ?, ?)`,
-            [id, ing.id, ing.quantity]
+            [id, ingredientId, ing.quantity]
           );
         }
       }
