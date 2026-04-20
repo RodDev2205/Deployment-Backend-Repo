@@ -33,6 +33,15 @@ export const addIngredient = async (req, res) => {
       branch_id = req.user.branch_id;
     }
 
+    const [existingRows] = await db.execute(
+      `SELECT inventory_id FROM inventory WHERE branch_id = ? AND LOWER(TRIM(item_name)) = LOWER(TRIM(?))`,
+      [branch_id, item_name]
+    );
+
+    if (existingRows.length > 0) {
+      return res.status(400).json({ message: "Ingredient name already exists for this branch." });
+    }
+
     const total_servings = quantity * servings_per_unit;
 
     const query = `
