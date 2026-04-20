@@ -23,9 +23,12 @@ export const calculateSeniorPWDDiscount = async (cart) => {
 
     // Process each item
     for (const item of cart) {
+      // Normalize item name field (accepts both "name" and "item")
+      const itemName = item.name || item.item;
+
       // Validate required fields
-      if (!item.product_id || !item.name || item.price === undefined || item.qty === undefined) {
-        throw new Error(`Invalid item: missing required fields for ${item.name || 'unknown'}`);
+      if (!item.product_id || !itemName || item.price === undefined || item.qty === undefined) {
+        throw new Error(`Invalid item: missing required fields for ${JSON.stringify(item)}`);
       }
 
       const price = Number(item.price);
@@ -33,11 +36,11 @@ export const calculateSeniorPWDDiscount = async (cart) => {
       let discountQty = Number(item.discountQty) || 0;
 
       // Validation rules
-      if (price < 0) throw new Error(`Invalid price for ${item.name}: price cannot be negative`);
-      if (qty < 0) throw new Error(`Invalid quantity for ${item.name}: qty cannot be negative`);
-      if (discountQty < 0) throw new Error(`Invalid discount quantity for ${item.name}: discountQty cannot be negative`);
+      if (price < 0) throw new Error(`Invalid price for ${itemName}: price cannot be negative`);
+      if (qty < 0) throw new Error(`Invalid quantity for ${itemName}: qty cannot be negative`);
+      if (discountQty < 0) throw new Error(`Invalid discount quantity for ${itemName}: discountQty cannot be negative`);
       if (discountQty > qty) {
-        console.warn(`⚠️ discountQty (${discountQty}) exceeds qty (${qty}) for ${item.name}. Capping to qty.`);
+        console.warn(`⚠️ discountQty (${discountQty}) exceeds qty (${qty}) for ${itemName}. Capping to qty.`);
         discountQty = qty;
       }
 
@@ -62,7 +65,7 @@ export const calculateSeniorPWDDiscount = async (cart) => {
 
       items.push({
         product_id: item.product_id,
-        name: item.name,
+        name: itemName,
         qty,
         discountQty,
         normalQty,
@@ -120,19 +123,20 @@ export const validateCartForDiscount = async (cart) => {
   }
 
   for (const item of cart) {
-    if (!item.product_id || !item.name || item.price === undefined || item.qty === undefined) {
+    const itemName = item.name || item.item;
+    if (!item.product_id || !itemName || item.price === undefined || item.qty === undefined) {
       return { valid: false, message: `Item missing required fields: ${JSON.stringify(item)}` };
     }
 
     if (Number(item.discountQty) > Number(item.qty)) {
       return { 
         valid: false, 
-        message: `Discount quantity exceeds item quantity for ${item.name}` 
+        message: `Discount quantity exceeds item quantity for ${itemName}` 
       };
     }
 
     if (Number(item.qty) <= 0) {
-      return { valid: false, message: `Invalid quantity for ${item.name}` };
+      return { valid: false, message: `Invalid quantity for ${itemName}` };
     }
   }
 
