@@ -312,6 +312,22 @@ export const editIngredientById = async (req, res) => {
       return res.status(400).json({ message: "Ingredient name already exists for this branch." });
     }
 
+    // Recompute status so threshold rules are always enforced
+    let effectiveStatus;
+    if (Number(quantity) === 0) {
+      effectiveStatus = 'out_of_stock';
+    } else if (Number(quantity) <= Number(low_stock_threshold)) {
+      effectiveStatus = 'low_stock';
+    } else {
+      if (status === 'active') {
+        effectiveStatus = 'available';
+      } else if (status === 'inactive') {
+        effectiveStatus = 'unavailable';
+      } else {
+        effectiveStatus = status || 'available';
+      }
+    }
+
     // Update query - include branch_id if changing branches
     let query;
     let values;
