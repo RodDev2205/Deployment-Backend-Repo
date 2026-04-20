@@ -172,26 +172,25 @@ export const completeSale = async (req, res) => {
 
     // ==================== STEP 4: Deduct servings and update quantity ====================
     for (const [ingredientId, servingsNeeded] of ingredientDeductions) {
-      // Get current stock and servings per unit
+      // Get current stock from inventory table
       const [[row]] = await connection.query(
-        `SELECT bi.stock_units, i.servings_per_unit, i.low_stock_threshold
-         FROM branch_inventory bi
-         JOIN ingredients i ON bi.ingredient_id = i.ingredient_id
-         WHERE bi.ingredient_id = ? AND bi.branch_id = ?`,
+        `SELECT quantity, servings_per_unit, low_stock_threshold
+         FROM inventory
+         WHERE inventory_id = ? AND branch_id = ?`,
         [ingredientId, user.branch_id]
       );
 
       if (!row) continue;
 
-      const { stock_units, servings_per_unit, low_stock_threshold } = row;
+      const { quantity, servings_per_unit, low_stock_threshold } = row;
       const servingsToDeduct = servingsNeeded;
       const unitsToDeduct = servingsToDeduct / servings_per_unit;
-      const newStockUnits = Math.max(0, stock_units - unitsToDeduct);
+      const newQuantity = Math.max(0, quantity - unitsToDeduct);
 
-      // Update stock_units
+      // Update quantity in inventory table
       await connection.query(
-        `UPDATE branch_inventory SET stock_units = ? WHERE ingredient_id = ? AND branch_id = ?`,
-        [newStockUnits, ingredientId, user.branch_id]
+        `UPDATE inventory SET quantity = ? WHERE inventory_id = ? AND branch_id = ?`,
+        [newQuantity, ingredientId, user.branch_id]
       );
     }
 
