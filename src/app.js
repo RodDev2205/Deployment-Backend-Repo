@@ -99,6 +99,16 @@ app.post("/api/migrate-menu-inventory-fk", async (req, res) => {
 
     console.log('Current constraints:', constraints);
 
+    // Check if ingredients table exists and get data
+    let ingredientsData = [];
+    try {
+      const [ingredientsRows] = await db.query('SELECT * FROM ingredients');
+      ingredientsData = ingredientsRows;
+      console.log(`Found ${ingredientsData.length} ingredients to migrate`);
+    } catch (err) {
+      console.log('Ingredients table not found or empty, skipping data migration');
+    }
+
     // Drop old constraint
     try {
       await db.query('ALTER TABLE menu_inventory DROP FOREIGN KEY fk_menu_inventory_ingredient');
@@ -109,6 +119,50 @@ app.post("/api/migrate-menu-inventory-fk", async (req, res) => {
       } else {
         throw err;
       }
+    }
+
+    // If ingredients table exists, migrate data to inventory table
+    if (ingredientsData.length > 0) {
+      console.log('📦 Migrating ingredients data to inventory table...');
+
+      for (const ingredient of ingredientsData) {
+        // Check if this ingredient already exists in inventory
+        const [existing] = await db.query(
+          'SELECT inventory_id FROM inventory WHERE item_name = ? AND branch_id IS NULL',
+          [ingredient.item_name]
+        );
+
+        if (existing.length === 0) {
+          // Insert into inventory
+          const [result] = await db.query(
+            `INSERT INTO inventory
+             (item_name, quantity, servings_per_unit, total_servings, low_stock_threshold, status, branch_id)
+             VALUES (?, ?, ?, ?, ?, 'available', NULL)`,
+            [
+              ingredient.item_name,
+              ingredient.stock_units || 0,
+              ingredient.servings_per_unit || 1,
+              (ingredient.stock_units || 0) * (ingredient.servings_per_unit || 1),
+              ingredient.low_stock_threshold || 5,
+            ]
+          );
+          console.log(`✅ Migrated ingredient ${ingredient.item_name} with new ID ${result.insertId}`);
+
+          // Update menu_inventory to use new inventory_id
+          await db.query(
+            'UPDATE menu_inventory SET ingredient_id = ? WHERE ingredient_id = ?',
+            [result.insertId, ingredient.ingredient_id]
+          );
+        } else {
+          // Update existing inventory and menu_inventory
+          await db.query(
+            'UPDATE menu_inventory SET ingredient_id = ? WHERE ingredient_id = ?',
+            [existing[0].inventory_id, ingredient.ingredient_id]
+          );
+        }
+      }
+
+      console.log('✅ Data migration completed');
     }
 
     // Add new constraint
@@ -129,6 +183,7 @@ app.post("/api/migrate-menu-inventory-fk", async (req, res) => {
     res.json({
       success: true,
       message: 'Migration completed successfully',
+      migratedIngredients: ingredientsData.length,
       oldConstraints: constraints,
       newConstraints: newConstraints
     });

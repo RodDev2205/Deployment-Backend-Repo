@@ -85,7 +85,7 @@ export const deductInventoryForOrder = async (productId, quantityOrdered, branch
         servingsPerUnit: inventory.servings_per_unit,
         lowStockThreshold: inventory.low_stock_threshold,
         requiredServings: requiredServings,
-        unitsToDeduct: requiredServings / inventory.servings_per_unit
+        unitsToDeduct: Math.ceil(requiredServings / inventory.servings_per_unit) // Round up to ensure sufficient deduction
       });
     }
 
@@ -94,7 +94,8 @@ export const deductInventoryForOrder = async (productId, quantityOrdered, branch
 
     for (const validation of ingredientValidations) {
       const newQuantity = Math.max(0, validation.currentQuantity - validation.unitsToDeduct);
-      const newTotalServings = newQuantity * validation.servingsPerUnit;
+      const servingsDeducted = validation.unitsToDeduct * validation.servingsPerUnit;
+      const newTotalServings = Math.max(0, (validation.currentQuantity * validation.servingsPerUnit) - servingsDeducted);
 
       // Determine new status
       let newStatus;
@@ -120,7 +121,7 @@ export const deductInventoryForOrder = async (productId, quantityOrdered, branch
         previousQuantity: validation.currentQuantity,
         newQuantity: newQuantity,
         unitsDeducted: validation.unitsToDeduct,
-        servingsDeducted: validation.requiredServings,
+        servingsDeducted: servingsDeducted,
         newStatus: newStatus
       });
     }
@@ -170,6 +171,8 @@ export const completeSale = async (req, res) => {
 
     // ==================== STEP 1: Validate items & collect ingredient needs ====================
     for (const item of cart) {
+      console.log(`🛒 Processing cart item: ${JSON.stringify(item)}`);
+
       const [productRows] = await connection.query(
         `SELECT product_id, price, vat_type FROM products WHERE product_id = ?`,
         [item.product_id]
@@ -201,6 +204,8 @@ export const completeSale = async (req, res) => {
         totalExclVat: itemTotalExclVat,
       });
 
+      console.log(`📦 Calling deductInventoryForOrder for product ${item.product_id}, quantity ${item.qty}`);
+
       // Get linked ingredients and validate/deduct inventory for this product
       const deductionResult = await deductInventoryForOrder(item.product_id, item.qty, user.branch_id, connection);
 
@@ -211,6 +216,8 @@ export const completeSale = async (req, res) => {
           message: deductionResult.message,
         });
       }
+
+      console.log(`✅ Deduction successful for product ${item.product_id}:`, deductionResult.deductions);
     }
 
     // ==================== STEP 2: Calculate totals ====================
