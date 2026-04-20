@@ -83,6 +83,8 @@ app.post("/api/print-receipt", async (req, res) => {
     console.error(err);
     res.status(500).json({ success: false, message: err.message });
   }
+});
+
 // Temporary migration endpoint
 app.post("/api/migrate-menu-inventory-fk", async (req, res) => {
   try {
