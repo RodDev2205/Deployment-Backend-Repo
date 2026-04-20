@@ -56,10 +56,10 @@ export const getAllProducts = async (req, res) => {
               bm.custom_price
        FROM products p
        JOIN categories c ON p.category_id = c.category_id
-       LEFT JOIN branch_menu bm ON bm.product_id = p.product_id AND bm.branch_id = ?
+       LEFT JOIN branch_menu bm ON bm.product_id = p.product_id AND bm.branch_id = ? AND bm.is_available = 1
        WHERE (
          p.branch_id = ?
-         OR (p.branch_id IS NULL AND bm.branch_menu_id IS NOT NULL AND bm.is_available = 1)
+         OR bm.branch_menu_id IS NOT NULL
        )`;
     const params = [userBranchId, userBranchId];
 
@@ -566,10 +566,11 @@ export const saveBranchMenuSelection = async (req, res) => {
       .filter((value) => Number.isInteger(value) && value > 0);
 
     const productIdsForQuery = productIds.length ? productIds : [0];
+    const existingPlaceholders = productIds.length ? productIds.map(() => '?').join(', ') : '0';
 
     const [existingRows] = await connection.query(
-      `SELECT product_id FROM branch_menu WHERE branch_id = ? AND product_id IN (?)`,
-      [branchId, productIdsForQuery]
+      `SELECT product_id FROM branch_menu WHERE branch_id = ? AND product_id IN (${existingPlaceholders})`,
+      [branchId, ...productIdsForQuery]
     );
     const existingIds = existingRows.map((row) => row.product_id);
     const toInsert = productIds.filter((id) => !existingIds.includes(id));
@@ -584,16 +585,18 @@ export const saveBranchMenuSelection = async (req, res) => {
     }
 
     if (existingIds.length > 0) {
+      const existingPlaceholders2 = existingIds.map(() => '?').join(', ');
       await connection.query(
-        `UPDATE branch_menu SET is_available = 1, updated_at = NOW() WHERE branch_id = ? AND product_id IN (?)`,
-        [branchId, existingIds]
+        `UPDATE branch_menu SET is_available = 1, updated_at = NOW() WHERE branch_id = ? AND product_id IN (${existingPlaceholders2})`,
+        [branchId, ...existingIds]
       );
     }
 
     if (productIds.length > 0) {
+      const productIdsPlaceholders = productIds.map(() => '?').join(', ');
       await connection.query(
-        `UPDATE branch_menu SET is_available = 0, updated_at = NOW() WHERE branch_id = ? AND product_id NOT IN (?)`,
-        [branchId, productIds]
+        `UPDATE branch_menu SET is_available = 0, updated_at = NOW() WHERE branch_id = ? AND product_id NOT IN (${productIdsPlaceholders})`,
+        [branchId, ...productIds]
       );
     } else {
       await connection.query(
