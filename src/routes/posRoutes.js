@@ -1,5 +1,5 @@
 import express from "express";
-import { completeSale, getUserTransactions, getTransactionDetails } from "../controllers/posController.js";
+import { completeSale, getUserTransactions, getTransactionDetails, testDeductInventory } from "../controllers/posController.js";
 import { voidTransaction } from "../controllers/voidController.js";
 import { refundTransaction } from "../controllers/refundController.js";
 import { verifyToken } from "../middlewares/verifyToken.js";
@@ -20,5 +20,8 @@ router.post("/void", verifyToken, voidTransaction);
 
 // POST /api/pos/refund - request refund (full or partial) with reason & admin pin
 router.post("/refund", verifyToken, refundTransaction);
+
+// POST /api/pos/deduct-inventory - test inventory deduction for a product order
+router.post("/deduct-inventory", verifyToken, testDeductInventory);
 
 export default router;

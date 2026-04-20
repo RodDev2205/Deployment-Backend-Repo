@@ -31,6 +31,121 @@ const generateTransactionNumber = () => {
   return `TXN-${timestamp}-${random}`;
 };
 
+/**
+ * Deducts inventory for a POS order
+ * @param {number} productId - The product ID being ordered
+ * @param {number} quantityOrdered - Quantity of the product ordered
+ * @param {number} branchId - Branch ID where inventory should be deducted
+ * @param {Object} connection - Database connection (for transaction support)
+ * @returns {Object} - Success status and details
+ */
+export const deductInventoryForOrder = async (productId, quantityOrdered, branchId, connection) => {
+  try {
+    // ==================== STEP 1: Get all ingredients for this product ====================
+    const [ingredientRows] = await connection.query(
+      `SELECT ingredient_id, servings_required
+       FROM menu_inventory
+       WHERE product_id = ?`,
+      [productId]
+    );
+
+    if (!ingredientRows || ingredientRows.length === 0) {
+      throw new Error(`Product ${productId} has no linked ingredients. Please set up ingredients for this product.`);
+    }
+
+    // ==================== STEP 2: Validate all ingredients have sufficient stock ====================
+    const ingredientValidations = [];
+
+    for (const ingredient of ingredientRows) {
+      const requiredServings = ingredient.servings_required * quantityOrdered;
+
+      // Get current inventory for this ingredient in the branch
+      const [inventoryRows] = await connection.query(
+        `SELECT inventory_id, item_name, quantity, servings_per_unit, total_servings, low_stock_threshold, status
+         FROM inventory
+         WHERE inventory_id = ? AND branch_id = ?`,
+        [ingredient.ingredient_id, branchId]
+      );
+
+      if (!inventoryRows || inventoryRows.length === 0) {
+        throw new Error(`Ingredient not found in branch inventory. Please add the ingredient to your branch.`);
+      }
+
+      const inventory = inventoryRows[0];
+      const availableServings = inventory.quantity * inventory.servings_per_unit;
+
+      if (availableServings < requiredServings) {
+        throw new Error(`Insufficient stock for "${inventory.item_name}". Available: ${availableServings}, Required: ${requiredServings}`);
+      }
+
+      ingredientValidations.push({
+        inventoryId: inventory.inventory_id,
+        itemName: inventory.item_name,
+        currentQuantity: inventory.quantity,
+        servingsPerUnit: inventory.servings_per_unit,
+        lowStockThreshold: inventory.low_stock_threshold,
+        requiredServings: requiredServings,
+        unitsToDeduct: requiredServings / inventory.servings_per_unit
+      });
+    }
+
+    // ==================== STEP 3: Deduct inventory for all validated ingredients ====================
+    const deductionResults = [];
+
+    for (const validation of ingredientValidations) {
+      const newQuantity = Math.max(0, validation.currentQuantity - validation.unitsToDeduct);
+      const newTotalServings = newQuantity * validation.servingsPerUnit;
+
+      // Determine new status
+      let newStatus;
+      if (newQuantity <= 0) {
+        newStatus = 'out_of_stock';
+      } else if (newQuantity <= validation.lowStockThreshold) {
+        newStatus = 'low_stock';
+      } else {
+        newStatus = 'available';
+      }
+
+      // Update inventory
+      await connection.query(
+        `UPDATE inventory
+         SET quantity = ?, total_servings = ?, status = ?
+         WHERE inventory_id = ? AND branch_id = ?`,
+        [newQuantity, newTotalServings, newStatus, validation.inventoryId, branchId]
+      );
+
+      deductionResults.push({
+        inventoryId: validation.inventoryId,
+        itemName: validation.itemName,
+        previousQuantity: validation.currentQuantity,
+        newQuantity: newQuantity,
+        unitsDeducted: validation.unitsToDeduct,
+        servingsDeducted: validation.requiredServings,
+        newStatus: newStatus
+      });
+    }
+
+    return {
+      success: true,
+      message: `Inventory deducted successfully for product ${productId}`,
+      productId: productId,
+      quantityOrdered: quantityOrdered,
+      branchId: branchId,
+      deductions: deductionResults
+    };
+
+  } catch (error) {
+    console.error('Inventory deduction error:', error);
+    return {
+      success: false,
+      message: error.message,
+      productId: productId,
+      quantityOrdered: quantityOrdered,
+      branchId: branchId
+    };
+  }
+};
+
 export const completeSale = async (req, res) => {
   const { cart, paymentMethod, amountPaid, discount, orderType } = req.body;
   const user = req.user; // From JWT token
@@ -52,7 +167,6 @@ export const completeSale = async (req, res) => {
     let subtotal = 0;
     let vatExclusiveSubtotal = 0;
     const transactionItemsData = [];
-    const ingredientDeductions = new Map(); // Track ingredient deductions needed
 
     // ==================== STEP 1: Validate items & collect ingredient needs ====================
     for (const item of cart) {
@@ -87,61 +201,19 @@ export const completeSale = async (req, res) => {
         totalExclVat: itemTotalExclVat,
       });
 
-      // Get linked ingredients
-      const [ingredientRows] = await connection.query(
-        `SELECT ingredient_id, servings_required FROM menu_inventory WHERE product_id = ?`,
-        [item.product_id]
-      );
+      // Get linked ingredients and validate/deduct inventory for this product
+      const deductionResult = await deductInventoryForOrder(item.product_id, item.qty, user.branch_id, connection);
 
-      if (!ingredientRows || ingredientRows.length === 0) {
+      if (!deductionResult.success) {
         await connection.rollback();
         return res.status(400).json({
           success: false,
-          message: `Product "${item.item || item.product_id}" has no linked ingredients. Please set up ingredients for this product.`,
-        });
-      }
-
-      // Collect ingredient deductions
-      for (const ingredient of ingredientRows) {
-        const servingsNeeded = ingredient.servings_required * item.qty;
-        const key = ingredient.ingredient_id;
-
-        ingredientDeductions.set(
-          key,
-          (ingredientDeductions.get(key) || 0) + servingsNeeded
-        );
-      }
-    }
-
-    // ==================== STEP 2: Check inventory ====================
-    for (const [ingredientId, servingsNeeded] of ingredientDeductions) {
-      const [inventoryRows] = await connection.query(
-        `SELECT inv.quantity as stock_units, inv.servings_per_unit, inv.item_name
-         FROM inventory inv
-         WHERE inv.inventory_id = ? AND inv.branch_id = ?`,
-        [ingredientId, user.branch_id]
-      );
-
-      if (!inventoryRows.length) {
-        await connection.rollback();
-        return res.status(400).json({
-          success: false,
-          message: `Ingredient not found in branch inventory. Please add the ingredient to your branch.`,
-        });
-      }
-
-      const availableServings = inventoryRows[0].stock_units * inventoryRows[0].servings_per_unit;
-
-      if (availableServings < servingsNeeded) {
-        await connection.rollback();
-        return res.status(400).json({
-          success: false,
-          message: `Insufficient stock for "${inventoryRows[0].item_name}". Available: ${availableServings}, Needed: ${servingsNeeded}`,
+          message: deductionResult.message,
         });
       }
     }
 
-    // ==================== STEP 3: Calculate totals ====================
+    // ==================== STEP 2: Calculate totals ====================
 
 
     const discountObj = discount || { type: "none", value: 0, amount: 0 };
@@ -170,31 +242,7 @@ export const completeSale = async (req, res) => {
       });
     }
 
-    // ==================== STEP 4: Deduct servings and update quantity ====================
-    for (const [ingredientId, servingsNeeded] of ingredientDeductions) {
-      // Get current stock from inventory table
-      const [[row]] = await connection.query(
-        `SELECT quantity, servings_per_unit, low_stock_threshold
-         FROM inventory
-         WHERE inventory_id = ? AND branch_id = ?`,
-        [ingredientId, user.branch_id]
-      );
-
-      if (!row) continue;
-
-      const { quantity, servings_per_unit, low_stock_threshold } = row;
-      const servingsToDeduct = servingsNeeded;
-      const unitsToDeduct = servingsToDeduct / servings_per_unit;
-      const newQuantity = Math.max(0, quantity - unitsToDeduct);
-
-      // Update quantity in inventory table
-      await connection.query(
-        `UPDATE inventory SET quantity = ? WHERE inventory_id = ? AND branch_id = ?`,
-        [newQuantity, ingredientId, user.branch_id]
-      );
-    }
-
-    // ==================== STEP 5: Create transaction ====================
+    // ==================== STEP 3: Create transaction ====================
     const transactionNumber = generateTransactionNumber();
 
     const [transactionResult] = await connection.query(
@@ -224,7 +272,7 @@ export const completeSale = async (req, res) => {
 
     console.log(`Transaction created with ID: ${transactionId}, Status: 'Completed'`);
 
-    // ==================== STEP 6: Insert transaction items ====================
+    // ==================== STEP 4: Insert transaction items ====================
     for (const item of transactionItemsData) {
       const itemPrice = useVatExclusivePricing ? item.priceExclVat : item.price;
       const itemTotal = useVatExclusivePricing ? item.totalExclVat : item.total;
@@ -236,7 +284,7 @@ export const completeSale = async (req, res) => {
       );
     }
 
-    // ==================== STEP 7: Insert discount details if applicable ====================
+    // ==================== STEP 5: Insert discount details if applicable ====================
     if ((discountObj.type === "senior" || discountObj.type === "pwd") && discountObj.verification) {
       await connection.query(
         `INSERT INTO discount_details (name, id_number, discount_type, transaction_id)
@@ -671,6 +719,65 @@ export const voidTransaction = async (req, res) => {
     await connection.rollback();
     console.error("Void Error:", error);
     res.status(500).json({ success: false, message: "Server error: " + error.message });
+  } finally {
+    connection.release();
+  }
+};
+
+/**
+ * API endpoint to test inventory deduction for a single product order
+ * POST /api/pos/deduct-inventory
+ * Body: { product_id: number, quantity_ordered: number, branch_id: number }
+ */
+export const testDeductInventory = async (req, res) => {
+  const { product_id, quantity_ordered, branch_id } = req.body;
+
+  // Validate required fields
+  if (!product_id || !quantity_ordered || !branch_id) {
+    return res.status(400).json({
+      success: false,
+      message: "Missing required fields: product_id, quantity_ordered, branch_id"
+    });
+  }
+
+  if (quantity_ordered <= 0) {
+    return res.status(400).json({
+      success: false,
+      message: "quantity_ordered must be greater than 0"
+    });
+  }
+
+  const connection = await db.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    // Call the inventory deduction function
+    const result = await deductInventoryForOrder(product_id, quantity_ordered, branch_id, connection);
+
+    if (result.success) {
+      await connection.commit();
+      res.json({
+        success: true,
+        message: "Inventory deducted successfully",
+        data: result
+      });
+    } else {
+      await connection.rollback();
+      res.status(400).json({
+        success: false,
+        message: result.message,
+        data: result
+      });
+    }
+
+  } catch (error) {
+    await connection.rollback();
+    console.error("Test inventory deduction error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error: " + error.message
+    });
   } finally {
     connection.release();
   }
