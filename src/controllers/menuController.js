@@ -500,17 +500,24 @@ export const getMenuInventoryByProduct = async (req, res) => {
     if (!prodRows.length) return res.status(404).json({ message: "Product not found" });
 
     const productBranch = prodRows[0].branch_id;
-    if (req.user && req.user.branch_id && req.user.branch_id !== productBranch) {
+    if (req.user && req.user.role_id === 2 && productBranch && req.user.branch_id !== productBranch) {
       return res.status(403).json({ message: "Forbidden" });
     }
 
-    const [rows] = await db.query(
-      `SELECT mi.product_id, mi.ingredient_id, mi.servings_required, i.item_name, i.quantity_per_unit, i.servings_per_unit
+    let query = `SELECT mi.product_id, mi.ingredient_id, mi.servings_required, i.item_name, i.quantity_per_unit, i.servings_per_unit
        FROM menu_inventory mi
-       JOIN ingredients i ON mi.ingredient_id = i.ingredient_id
-       WHERE mi.product_id = ?`,
-      [product_id]
-    );
+       JOIN ingredients i ON mi.ingredient_id = i.ingredient_id`;
+    const params = [product_id];
+
+    if (req.user && req.user.branch_id) {
+      query += `
+       JOIN branch_inventory bi ON mi.ingredient_id = bi.ingredient_id AND bi.branch_id = ?`;
+      params.unshift(req.user.branch_id);
+    }
+
+    query += ` WHERE mi.product_id = ?`;
+
+    const [rows] = await db.query(query, params);
 
     res.json(rows);
   } catch (err) {
