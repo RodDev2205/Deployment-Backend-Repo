@@ -261,7 +261,8 @@ export const getLowStockItems = async (req, res) => {
 export const editIngredientById = async (req, res) => {
   try {
     const { id } = req.params; // inventory ID from URL
-    const branch_id = req.user.branch_id; // ensure user only edits their branch
+    const userRole = req.user.role_id;
+    const userBranchId = req.user.branch_id;
 
     const {
       item_name,
@@ -269,64 +270,106 @@ export const editIngredientById = async (req, res) => {
       servings_per_unit,
       low_stock_threshold,
       status,
+      branch_id: newBranchId,
     } = req.body;
 
     // Recalculate total servings
     const total_servings = quantity * servings_per_unit;
 
-    // Update query, but ensure only inventory from this branch can be edited
-    const query = `
-      UPDATE inventory
-      SET item_name = ?, quantity = ?, servings_per_unit = ?, total_servings = ?, low_stock_threshold = ?, status = ?
-      WHERE inventory_id = ? AND branch_id = ?
-    `;
-    // Recompute status so threshold rules are always enforced
-    // convert provided status to enum values
-    let effectiveStatus;
-    if (Number(quantity) === 0) {
-      effectiveStatus = 'out_of_stock';
-    } else if (Number(quantity) <= Number(low_stock_threshold)) {
-      effectiveStatus = 'low_stock';
-    } else {
-      if (status === 'active') {
-        effectiveStatus = 'available';
-      } else if (status === 'inactive') {
-        effectiveStatus = 'unavailable';
-      } else {
-        effectiveStatus = status || 'available';
+    // Check if ingredient exists and get its branch_id
+    const [existingRows] = await db.execute(
+      `SELECT branch_id, item_name FROM inventory WHERE inventory_id = ?`,
+      [id]
+    );
+
+    if (existingRows.length === 0) {
+      return res.status(404).json({ message: "Ingredient not found" });
+    }
+
+    const ingredientBranchId = existingRows[0].branch_id;
+
+    // Check permissions: SuperAdmin can edit any branch, Admin can only edit their own branch
+    if (userRole !== 3 && userBranchId !== ingredientBranchId) {
+      return res.status(403).json({ message: "No permission to edit this ingredient" });
+    }
+
+    // Determine the target branch (use new branch if provided by superadmin, otherwise keep current)
+    let targetBranchId = ingredientBranchId;
+    if (userRole === 3 && newBranchId) {
+      targetBranchId = Number(newBranchId);
+      if (isNaN(targetBranchId) || targetBranchId <= 0) {
+        return res.status(400).json({ message: "Invalid branch_id" });
       }
     }
 
-    const values = [
-      item_name,
-      quantity,
-      servings_per_unit,
-      total_servings,
-      low_stock_threshold,
-      effectiveStatus,
-      id,
-      branch_id,
-    ];
+    // Check for duplicate name in the target branch (excluding current item)
+    const [duplicateRows] = await db.execute(
+      `SELECT inventory_id FROM inventory WHERE branch_id = ? AND LOWER(TRIM(item_name)) = LOWER(TRIM(?)) AND inventory_id != ?`,
+      [targetBranchId, item_name, id]
+    );
+
+    if (duplicateRows.length > 0) {
+      return res.status(400).json({ message: "Ingredient name already exists for this branch." });
+    }
+
+    // Update query - include branch_id if changing branches
+    let query;
+    let values;
+
+    if (userRole === 3 && newBranchId && targetBranchId !== ingredientBranchId) {
+      // SuperAdmin is changing branch
+      query = `
+        UPDATE inventory
+        SET item_name = ?, quantity = ?, servings_per_unit = ?, total_servings = ?, low_stock_threshold = ?, status = ?, branch_id = ?
+        WHERE inventory_id = ?
+      `;
+      values = [
+        item_name,
+        quantity,
+        servings_per_unit,
+        total_servings,
+        low_stock_threshold,
+        effectiveStatus,
+        targetBranchId,
+        id,
+      ];
+    } else {
+      // Normal update without branch change
+      query = `
+        UPDATE inventory
+        SET item_name = ?, quantity = ?, servings_per_unit = ?, total_servings = ?, low_stock_threshold = ?, status = ?
+        WHERE inventory_id = ?
+      `;
+      values = [
+        item_name,
+        quantity,
+        servings_per_unit,
+        total_servings,
+        low_stock_threshold,
+        effectiveStatus,
+        id,
+      ];
+    }
 
     const [result] = await db.execute(query, values);
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ message: "Ingredient not found or no permission" });
+      return res.status(404).json({ message: "Ingredient not found" });
     }
 
     // Log the activity
     await logInventoryActivity({
       userId: req.user.user_id,
-      branchId: branch_id,
-      activityType: 'inventory_adjustment',
-      description: `Updated ingredient: ${item_name} (quantity: ${quantity})`,
+      branchId: targetBranchId,
+      activityType: 'inventory_edit',
+      description: `Edited ingredient: ${item_name}`,
       referenceId: id
     });
 
     // notify dashboard for branch
-    io.to(`branch_${branch_id}`).emit('dashboardUpdate', { branch_id });
+    io.to(`branch_${targetBranchId}`).emit('dashboardUpdate', { branch_id: targetBranchId });
     // also send globally
-    io.emit('dashboardUpdate', { branch_id });
+    io.emit('dashboardUpdate', { branch_id: targetBranchId });
 
     res.status(200).json({
       message: "Ingredient updated successfully",
