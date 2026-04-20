@@ -86,7 +86,7 @@ export const getMenuInventorybyid = async (req, res) => {
     const [rows] = await db.query(
       `SELECT 
         mi.product_id,
-        mi.ingredient_id,
+        mi.ingredient_id as inventory_id,
         mi.servings_required,
         inv.item_name,
         inv.servings_per_unit

@@ -504,7 +504,7 @@ export const getMenuInventoryByProduct = async (req, res) => {
       return res.status(403).json({ message: "Forbidden" });
     }
 
-    const query = `SELECT mi.product_id, mi.ingredient_id, mi.servings_required, inv.item_name, inv.servings_per_unit
+    const query = `SELECT mi.product_id, mi.ingredient_id as inventory_id, mi.servings_required, inv.item_name, inv.servings_per_unit
        FROM menu_inventory mi
        JOIN inventory inv ON mi.ingredient_id = inv.inventory_id
        WHERE mi.product_id = ? AND inv.branch_id = ?`;
