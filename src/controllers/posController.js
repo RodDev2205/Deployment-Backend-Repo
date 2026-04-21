@@ -498,10 +498,12 @@ export const getUserTransactions = async (req, res) => {
 
     // All users (including admins) see only their own transactions
     const [rows] = await db.query(
-      `SELECT transaction_id, transaction_number, created_at, total_amount, amount_paid, status, order_type
-       FROM transactions
-       WHERE cashier_id = ? AND branch_id = ?
-       ORDER BY created_at DESC`,
+      `SELECT t.transaction_id, t.transaction_number, t.created_at, t.total_amount, t.amount_paid, 
+              t.discount_amount, t.status, t.order_type, b.branch_name
+       FROM transactions t
+       LEFT JOIN branches b ON t.branch_id = b.branch_id
+       WHERE t.cashier_id = ? AND t.branch_id = ?
+       ORDER BY t.created_at DESC`,
       [userId, branchId]
     );
 
