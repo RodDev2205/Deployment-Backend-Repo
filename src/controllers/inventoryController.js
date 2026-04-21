@@ -21,7 +21,7 @@ export const addIngredient = async (req, res) => {
     console.log("REQ.USER:", req.user);
     console.log("REQ.BODY:", req.body);
 
-    const { item_name, quantity, servings_per_unit, low_stock_threshold, status, branch_id: requestedBranchId } = req.body;
+    const { item_name, quantity, servings_per_unit, low_stock_threshold, status, branch_id: requestedBranchId, main_category_id, sub_category_id } = req.body;
 
     let branch_id;
     if (req.user.role_id === 3) {
@@ -46,8 +46,8 @@ export const addIngredient = async (req, res) => {
 
     const query = `
       INSERT INTO inventory 
-      (item_name, quantity, servings_per_unit, total_servings, low_stock_threshold, status, branch_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      (item_name, quantity, servings_per_unit, total_servings, low_stock_threshold, status, branch_id, main_category_id, sub_category_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     // Determine status based on quantity and threshold
     // translate front-end status values to enum ('active' -> 'available', 'inactive' -> 'unavailable')
@@ -75,6 +75,8 @@ export const addIngredient = async (req, res) => {
       low_stock_threshold,
       effectiveStatus,
       branch_id,
+      main_category_id || null,
+      sub_category_id || null,
     ];
 
     // use promise-based pool (mysql2/promise)
@@ -271,6 +273,8 @@ export const editIngredientById = async (req, res) => {
       low_stock_threshold,
       status,
       branch_id: newBranchId,
+      main_category_id,
+      sub_category_id,
     } = req.body;
 
     // Recalculate total servings
@@ -336,7 +340,7 @@ export const editIngredientById = async (req, res) => {
       // SuperAdmin is changing branch
       query = `
         UPDATE inventory
-        SET item_name = ?, quantity = ?, servings_per_unit = ?, total_servings = ?, low_stock_threshold = ?, status = ?, branch_id = ?
+        SET item_name = ?, quantity = ?, servings_per_unit = ?, total_servings = ?, low_stock_threshold = ?, status = ?, branch_id = ?, main_category_id = ?, sub_category_id = ?
         WHERE inventory_id = ?
       `;
       values = [
@@ -347,13 +351,15 @@ export const editIngredientById = async (req, res) => {
         low_stock_threshold,
         effectiveStatus,
         targetBranchId,
+        main_category_id || null,
+        sub_category_id || null,
         id,
       ];
     } else {
       // Normal update without branch change
       query = `
         UPDATE inventory
-        SET item_name = ?, quantity = ?, servings_per_unit = ?, total_servings = ?, low_stock_threshold = ?, status = ?
+        SET item_name = ?, quantity = ?, servings_per_unit = ?, total_servings = ?, low_stock_threshold = ?, status = ?, main_category_id = ?, sub_category_id = ?
         WHERE inventory_id = ?
       `;
       values = [
@@ -363,6 +369,8 @@ export const editIngredientById = async (req, res) => {
         total_servings,
         low_stock_threshold,
         effectiveStatus,
+        main_category_id || null,
+        sub_category_id || null,
         id,
       ];
     }
@@ -393,6 +401,42 @@ export const editIngredientById = async (req, res) => {
     });
   } catch (error) {
     console.error("DB/CATCH ERROR:", error);
+    res.status(500).json({ message: "Database error", error: error.message });
+  }
+};
+
+// GET all main categories
+export const getMainCategories = async (req, res) => {
+  try {
+    const [rows] = await db.execute(
+      `SELECT main_category_id, name, description FROM main_categories ORDER BY name ASC`
+    );
+    res.status(200).json(rows || []);
+  } catch (error) {
+    console.error("DB ERROR:", error);
+    res.status(500).json({ message: "Database error", error: error.message });
+  }
+};
+
+// GET all sub categories (optionally filtered by main_category_id)
+export const getSubCategories = async (req, res) => {
+  try {
+    const { main_category_id } = req.query;
+
+    let query;
+    let params = [];
+
+    if (main_category_id) {
+      query = `SELECT sub_category_id, main_category_id, name, description FROM sub_categories WHERE main_category_id = ? ORDER BY name ASC`;
+      params = [Number(main_category_id)];
+    } else {
+      query = `SELECT sub_category_id, main_category_id, name, description FROM sub_categories ORDER BY main_category_id ASC, name ASC`;
+    }
+
+    const [rows] = await db.execute(query, params);
+    res.status(200).json(rows || []);
+  } catch (error) {
+    console.error("DB ERROR:", error);
     res.status(500).json({ message: "Database error", error: error.message });
   }
 };

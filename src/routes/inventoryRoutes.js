@@ -7,7 +7,9 @@ import { addIngredient,
          getAllInventoryItems, 
          getInventoryCount, 
          getLowStockCount,
-         getLowStockItems } from '../controllers/inventoryController.js';
+         getLowStockItems,
+         getMainCategories,
+         getSubCategories } from '../controllers/inventoryController.js';
 
 const router = Router();
 
@@ -67,6 +69,20 @@ router.get(
   getLowStockItems
 );
 
+// Get all main categories
+router.get(
+  '/main-categories',
+  verifyToken,
+  requireRole(2, 3), // SuperAdmin and Admin
+  getMainCategories
+);
 
+// Get all sub categories (optionally filtered by main_category_id)
+router.get(
+  '/sub-categories',
+  verifyToken,
+  requireRole(2, 3), // SuperAdmin and Admin
+  getSubCategories
+);
 
 export default router;
