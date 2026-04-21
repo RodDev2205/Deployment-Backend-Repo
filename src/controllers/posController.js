@@ -230,11 +230,14 @@ export const completeSale = async (req, res) => {
     }
 
     // ==================== STEP 2: Calculate totals ====================
-
+    // IMPORTANT: For senior/PWD discounts, we apply 20% to VAT-EXCLUSIVE prices
+    // But we ALWAYS store the original VAT-INCLUSIVE subtotal for accurate reporting
 
     const discountObj = discount || { type: "none", value: 0, amount: 0 };
     let discountAmount = discountObj.amount || 0;
     const useVatExclusivePricing = discountObj.type === "senior" || discountObj.type === "pwd";
+    
+    // Use VAT-exclusive for discount calculation only
     const effectiveSubtotal = useVatExclusivePricing ? vatExclusiveSubtotal : subtotal;
 
     if (discountObj.type === "percentage") {
@@ -269,7 +272,7 @@ export const completeSale = async (req, res) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         transactionNumber,
-        effectiveSubtotal,
+        subtotal,  // ✓ FIX: Always store original VAT-INCLUSIVE subtotal for accurate reporting
         discountObj.type || "none",
         discountObj.value || 0,
         discountAmount,
@@ -290,13 +293,13 @@ export const completeSale = async (req, res) => {
 
     // ==================== STEP 4: Insert transaction items ====================
     for (const item of transactionItemsData) {
-      const itemPrice = useVatExclusivePricing ? item.priceExclVat : item.price;
-      const itemTotal = useVatExclusivePricing ? item.totalExclVat : item.total;
+      // ✓ FIX: Always store original prices (VAT-inclusive), not VAT-exclusive
+      // This ensures accurate item-level tracking and reconciliation
       await connection.query(
         `INSERT INTO transaction_items 
          (transaction_id, menu_id, quantity, price, total, voided_quantity)
          VALUES (?, ?, ?, ?, ?, ?)`,
-        [transactionId, item.menu_id, item.quantity, itemPrice, itemTotal, 0]
+        [transactionId, item.menu_id, item.quantity, item.price, item.total, 0]
       );
     }
 
@@ -388,6 +391,8 @@ export const createTransaction = async (branchId, items, options = {}) => {
     }
 
     // Calculate discount if provided
+    // IMPORTANT: For senior/PWD discounts, we apply 20% to original amounts
+    // But we ALWAYS store the original subtotal for accurate reporting
     const discount = options.discount || { type: 'none', value: 0 };
     let discountAmount = 0;
     if (discount.type === 'percentage') {
@@ -406,6 +411,7 @@ export const createTransaction = async (branchId, items, options = {}) => {
     const transactionNumber = generateTransactionNumber();
 
     // Insert transaction
+    // ✓ FIX: Always store original subtotal for accurate reporting
     const [transactionResult] = await connection.query(
       `INSERT INTO transactions
        (transaction_number, subtotal, discount_type, discount_value, discount_amount,
@@ -414,7 +420,7 @@ export const createTransaction = async (branchId, items, options = {}) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
       [
         transactionNumber,
-        subtotal,
+        subtotal,  // ✓ Store original subtotal
         discount.type || 'none',
         discount.value || 0,
         discountAmount,
@@ -432,6 +438,7 @@ export const createTransaction = async (branchId, items, options = {}) => {
     const transactionId = transactionResult.insertId;
 
     // Insert transaction items
+    // ✓ FIX: Always store original prices
     for (const item of items) {
       await connection.query(
         `INSERT INTO transaction_items
