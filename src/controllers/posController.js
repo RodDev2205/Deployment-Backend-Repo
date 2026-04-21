@@ -157,7 +157,7 @@ export const deductInventoryForOrder = async (productId, quantityOrdered, branch
 };
 
 export const completeSale = async (req, res) => {
-  const { cart, paymentMethod, amountPaid, discount, orderType } = req.body;
+  const { cart, paymentMethod, amountPaid, discount, orderType, finalAmount } = req.body;
   const user = req.user; // From JWT token
   const order_type = orderType && (orderType === 'takeout' || orderType === 'dine-in') ? orderType : 'dine-in';
 
@@ -232,6 +232,7 @@ export const completeSale = async (req, res) => {
     // ==================== STEP 2: Calculate totals ====================
     // IMPORTANT: For senior/PWD discounts, we apply 20% to VAT-EXCLUSIVE prices
     // But we ALWAYS store the original VAT-INCLUSIVE subtotal for accurate reporting
+    // And we use the finalAmount sent by frontend for total_amount (most accurate)
 
     const discountObj = discount || { type: "none", value: 0, amount: 0 };
     let discountAmount = discountObj.amount || 0;
@@ -250,7 +251,9 @@ export const completeSale = async (req, res) => {
       discountAmount = discountAmount || effectiveSubtotal * 0.2;
     }
 
-    const totalAmount = effectiveSubtotal - discountAmount;
+    // ✓ FIX: Use finalAmount sent by frontend if available, otherwise calculate
+    // This ensures backend matches frontend calculation exactly
+    const totalAmount = finalAmount !== undefined ? Number(finalAmount) : (effectiveSubtotal - discountAmount);
     const changeAmount = Number(amountPaid) - totalAmount;
 
     if (changeAmount < 0) {
@@ -272,11 +275,11 @@ export const completeSale = async (req, res) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         transactionNumber,
-        subtotal,  // ✓ FIX: Always store original VAT-INCLUSIVE subtotal for accurate reporting
+        subtotal,  // ✓ CORRECT: Always store original VAT-INCLUSIVE subtotal
         discountObj.type || "none",
         discountObj.value || 0,
         discountAmount,
-        totalAmount,
+        totalAmount,  // ✓ CORRECT: Use finalAmount from frontend for accuracy
         paymentMethod,
         amountPaid,
         changeAmount,
@@ -293,8 +296,7 @@ export const completeSale = async (req, res) => {
 
     // ==================== STEP 4: Insert transaction items ====================
     for (const item of transactionItemsData) {
-      // ✓ FIX: Always store original prices (VAT-inclusive), not VAT-exclusive
-      // This ensures accurate item-level tracking and reconciliation
+      // ✓ CORRECT: Always store original prices (VAT-inclusive)
       await connection.query(
         `INSERT INTO transaction_items 
          (transaction_id, menu_id, quantity, price, total, voided_quantity)
