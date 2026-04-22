@@ -65,7 +65,7 @@ export const createAdmin = async (req, res) => {
   try {
     // token payload uses user_id field, not id
     const superadminId = req.user.user_id;
-    const { first_name, last_name, username, password, branch_id, contact_number } = req.body; // match frontend
+    const { first_name, middle_name, last_name, username, password, branch_id, contact_number } = req.body; // match frontend
     if (!first_name || !last_name || !username || !password || !branch_id) {
       return res.status(400).json({ error: "All fields are required" });
     }
@@ -80,9 +80,9 @@ export const createAdmin = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const [result] = await db.query(
-      `INSERT INTO users (first_name, last_name, contact_number, username, password, role_id, branch_id, status, created_by)
-       VALUES (?, ?, ?, ?, ?, 2, ?, 'Activate', ?)`,
-      [first_name, last_name, contact_number, username, hashedPassword, branch_id, superadminId]
+      `INSERT INTO users (first_name, middle_initial, last_name, contact_number, username, password, role_id, branch_id, status, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, 2, ?, 'Activate', ?)`,
+      [first_name, middle_name || null, last_name, contact_number, username, hashedPassword, branch_id, superadminId]
     );
 
     // generate 4-digit pin code for the newly created admin using SQL expression
@@ -103,7 +103,7 @@ export const createAdmin = async (req, res) => {
 export const createCashier = async (req, res) => {
   try {
     const superadminId = req.user.user_id; 
-    const { first_name, last_name, username, password, branch_id, contact_number } = req.body; // match frontend
+    const { first_name, middle_name, last_name, username, password, branch_id, contact_number } = req.body; // match frontend
     if (!first_name || !last_name || !username || !password || !branch_id) {
       return res.status(400).json({ error: "All fields are required" });
     }
@@ -118,9 +118,9 @@ export const createCashier = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const [result] = await db.query(
-      `INSERT INTO users (first_name, last_name, contact_number, username, password, role_id, branch_id, status, created_by)
-       VALUES (?, ?, ?, ?, ?, 1, ?, 'Activate', ?)`,
-      [first_name, last_name, contact_number, username, hashedPassword, branch_id, superadminId]
+      `INSERT INTO users (first_name, middle_initial, last_name, contact_number, username, password, role_id, branch_id, status, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, 1, ?, 'Activate', ?)`,
+      [first_name, middle_name || null, last_name, contact_number, username, hashedPassword, branch_id, superadminId]
     );
 
     // generate 4-digit pin code for the newly created cashier using SQL expression

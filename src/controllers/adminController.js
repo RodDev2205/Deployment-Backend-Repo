@@ -30,7 +30,7 @@ export const createCashier = async (req, res) => {
 
     const adminId = req.user.user_id; // from JWT
     const branchId = req.user.branch_id; // from JWT
-    const { first_name, last_name, username, password, contact_number } = req.body;
+    const { first_name, middle_name, last_name, username, password, contact_number } = req.body;
 
     console.log("📋 Input validation...");
     if (!first_name || !last_name || !username || !password) {
@@ -52,9 +52,9 @@ export const createCashier = async (req, res) => {
 
     console.log("💾 Inserting cashier into database...");
     const [result] = await db.query(
-      `INSERT INTO users (first_name, last_name, username, password, role_id, status, branch_id, contact_number, created_by)
-       VALUES (?, ?, ?, ?, 1, 'Activate', ?, ?, ?)`,
-      [first_name, last_name, username, hashedPassword, branchId, contact_number || null, adminId]
+      `INSERT INTO users (first_name, middle_initial, last_name, username, password, role_id, status, branch_id, contact_number, created_by)
+       VALUES (?, ?, ?, ?, ?, 1, 'Activate', ?, ?, ?)`,
+      [first_name, middle_name || null, last_name, username, hashedPassword, branchId, contact_number || null, adminId]
     );
 
     console.log("✅ Cashier inserted, ID:", result.insertId);
