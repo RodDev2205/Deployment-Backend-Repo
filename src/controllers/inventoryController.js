@@ -427,10 +427,10 @@ export const getSubCategories = async (req, res) => {
     let params = [];
 
     if (main_category_id) {
-      query = `SELECT sub_category_id, main_category_id, name, description FROM sub_categories WHERE main_category_id = ?`;
+      query = `SELECT sub_category_id, main_category_id, name FROM sub_categories WHERE main_category_id = ?`;
       params = [Number(main_category_id)];
     } else {
-      query = `SELECT sub_category_id, main_category_id, name, description FROM sub_categories`;
+      query = `SELECT sub_category_id, main_category_id, name FROM sub_categories`;
     }
 
     const [rows] = await db.execute(query, params);
@@ -544,7 +544,7 @@ export const deleteMainCategory = async (req, res) => {
 // CREATE sub category
 export const createSubCategory = async (req, res) => {
   try {
-    const { main_category_id, name, description } = req.body;
+    const { main_category_id, name } = req.body;
 
     if (!main_category_id) {
       return res.status(400).json({ error: "Main category ID is required" });
@@ -565,12 +565,12 @@ export const createSubCategory = async (req, res) => {
     }
 
     const [result] = await db.execute(
-      `INSERT INTO sub_categories (main_category_id, name, description) VALUES (?, ?, ?)`,
-      [main_category_id, name.trim(), description || null]
+      `INSERT INTO sub_categories (main_category_id, name) VALUES (?, ?)`,
+      [main_category_id, name.trim()]
     );
 
     const [newSubCategory] = await db.execute(
-      `SELECT sub_category_id, main_category_id, name, description FROM sub_categories WHERE sub_category_id = ?`,
+      `SELECT sub_category_id, main_category_id, name FROM sub_categories WHERE sub_category_id = ?`,
       [result.insertId]
     );
 
@@ -588,15 +588,15 @@ export const createSubCategory = async (req, res) => {
 export const updateSubCategory = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description } = req.body;
+    const { name } = req.body;
 
     if (!name || !name.trim()) {
       return res.status(400).json({ error: "Sub category name is required" });
     }
 
     const [result] = await db.execute(
-      `UPDATE sub_categories SET name = ?, description = ?, updated_at = NOW() WHERE sub_category_id = ?`,
-      [name.trim(), description || null, id]
+      `UPDATE sub_categories SET name = ?, updated_at = NOW() WHERE sub_category_id = ?`,
+      [name.trim(), id]
     );
 
     if (result.affectedRows === 0) {
@@ -604,7 +604,7 @@ export const updateSubCategory = async (req, res) => {
     }
 
     const [updatedSubCategory] = await db.execute(
-      `SELECT sub_category_id, main_category_id, name, description FROM sub_categories WHERE sub_category_id = ?`,
+      `SELECT sub_category_id, main_category_id, name FROM sub_categories WHERE sub_category_id = ?`,
       [id]
     );
 
