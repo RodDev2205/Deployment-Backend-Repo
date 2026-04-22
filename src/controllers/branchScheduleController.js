@@ -73,14 +73,27 @@ export const setBranchWeeklySchedule = async (req, res) => {
 
     // Insert new schedules
     for (const schedule of schedules) {
-      const { dayOfWeek, openTime, closeTime, isClosed } = schedule;
+      // Handle both camelCase and snake_case field names
+      const dayOfWeek = schedule.dayOfWeek;
+      const openTime = schedule.open_time || schedule.openTime;
+      const closeTime = schedule.close_time || schedule.closeTime;
+      const isClosed = schedule.is_closed !== undefined ? schedule.is_closed : schedule.isClosed;
 
       if (!dayOfWeek) continue;
 
-      await db.execute(
-        'INSERT INTO branch_schedule (branch_id, day_of_week, open_time, close_time, is_closed) VALUES (?, ?, ?, ?, ?)',
-        [branchId, dayOfWeek, openTime || null, closeTime || null, isClosed ? 1 : 0]
-      );
+      // Only insert if times are provided or explicitly closed
+      if (openTime && closeTime) {
+        await db.execute(
+          'INSERT INTO branch_schedule (branch_id, day_of_week, open_time, close_time, is_closed) VALUES (?, ?, ?, ?, ?)',
+          [branchId, dayOfWeek, openTime, closeTime, isClosed ? 1 : 0]
+        );
+      } else if (isClosed) {
+        // Insert closed day with no times
+        await db.execute(
+          'INSERT INTO branch_schedule (branch_id, day_of_week, open_time, close_time, is_closed) VALUES (?, ?, ?, ?, ?)',
+          [branchId, dayOfWeek, null, null, 1]
+        );
+      }
     }
 
     res.status(200).json({ message: 'Weekly schedule set successfully' });
