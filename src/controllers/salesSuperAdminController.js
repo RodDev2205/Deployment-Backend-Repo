@@ -55,16 +55,12 @@ export async function getKpis(req, res) {
       ? [startSql, endSql, parseInt(branchId)]
       : [startSql, endSql];
 
-    // Setup where clause for completed transactions only
-    const completedWhereClause = whereClause + ` AND t.status = 'Completed'`;
-    const completedParams = [...params, 'Completed'];
-
     // 1) GROSS SALES = SUM(subtotal from Completed transactions BEFORE discount)
     const [grossRows] = await db.execute(
       `SELECT COALESCE(SUM(t.subtotal), 0) AS gross_sales
        FROM transactions t
-       WHERE ${completedWhereClause}`,
-      completedParams
+       WHERE ${whereClause}`,
+      params
     );
 
     // 2) VOID SALES = SUM(subtotal from Voided transactions - includes Voided and Partial Voided)
@@ -86,8 +82,8 @@ export async function getKpis(req, res) {
     const [discountRows] = await db.execute(
       `SELECT COALESCE(SUM(t.discount_amount), 0) AS total_discounts
        FROM transactions t
-       WHERE ${completedWhereClause}`,
-      completedParams
+       WHERE ${whereClause}`,
+      params
     );
 
     // 2) Total transactions (filtered by branch if selected)
