@@ -5,7 +5,18 @@ import { io } from "../../server.js"; // realtime notification
 export const updateUser = async (req, res) => {
   try {
     const userId = req.params.id;
-    const { first_name, last_name, username, password, branch_id, contact_number, old_password } = req.body;
+    const { first_name, last_name, username, password, branch_id, contact_number, old_password, middle_name } = req.body;
+
+    console.log('🔧 updateUser called with:', {
+      userId,
+      first_name,
+      last_name,
+      middle_name,
+      username,
+      contact_number,
+      hasPassword: !!password,
+      hasBranchId: !!branch_id
+    });
 
     if (!first_name || !last_name || !username) {
       return res.status(400).json({
@@ -54,43 +65,63 @@ export const updateUser = async (req, res) => {
     let sql;
     let params;
 
-    // always update first_name, last_name, username, branch_id, contact_number
+    // Build dynamic UPDATE query including middle_initial
     if (hashedPassword) {
       sql = `
         UPDATE users 
-        SET first_name = ?, last_name = ?, username = ?, password = ?, branch_id = ?, contact_number = ?
+        SET first_name = ?, last_name = ?, middle_initial = ?, username = ?, password = ?, branch_id = ?, contact_number = ?, updated_at = NOW()
         WHERE user_id = ?
       `;
-      params = [first_name, last_name, username, hashedPassword, finalBranchId, contact_number || null, userId];
+      params = [first_name, last_name, middle_name || null, username, hashedPassword, finalBranchId, contact_number || null, userId];
     } else {
       sql = `
         UPDATE users 
-        SET first_name = ?, last_name = ?, username = ?, branch_id = ?, contact_number = ?
+        SET first_name = ?, last_name = ?, middle_initial = ?, username = ?, branch_id = ?, contact_number = ?, updated_at = NOW()
         WHERE user_id = ?
       `;
-      params = [first_name, last_name, username, finalBranchId, contact_number || null, userId];
+      params = [first_name, last_name, middle_name || null, username, finalBranchId, contact_number || null, userId];
     }
+
+    console.log('🔧 SQL Params:', params);
+    console.log('🔧 middle_name value being saved:', middle_name || null);
 
     const [result] = await db.query(sql, params);
 
     if (result.affectedRows === 0) {
+      console.error('❌ No rows affected - user not found');
       return res.status(404).json({ error: "User not found" });
     }
 
+    console.log('✅ Update successful, affected rows:', result.affectedRows);
+
     const [updatedUserRows] = await db.query(
-      "SELECT user_id, first_name, last_name, username, branch_id, contact_number FROM users WHERE user_id = ?",
+      "SELECT user_id, first_name, last_name, middle_initial, username, branch_id, contact_number FROM users WHERE user_id = ?",
       [userId]
     );
+
+    console.log('✅ Retrieved updated user:', updatedUserRows[0]);
 
     // notify dashboards for affected branch(s)
     const updated = updatedUserRows[0];
     io.to(`branch_${updated.branch_id}`).emit('dashboardUpdate', { branch_id: updated.branch_id });
     io.emit('dashboardUpdate', { branch_id: updated.branch_id });
+    
+    // Format response to match what frontend expects
     res.json({
       message: "User updated successfully",
-      user: updated,
+      user: {
+        user_id: updated.user_id,
+        first_name: updated.first_name,
+        last_name: updated.last_name,
+        middle_initial: updated.middle_initial,
+        middle_name: updated.middle_initial,
+        username: updated.username,
+        branch_id: updated.branch_id,
+        contact_number: updated.contact_number
+      }
     });
   } catch (err) {
+    console.error('❌ updateUser error:', err);
     res.status(500).json({
       error: "Failed to update user",
       details: err.message,
@@ -130,8 +161,8 @@ export const getCurrentUser = async (req, res) => {
     console.log('req.user object:', req.user);
 
     const selectFields = req.user?.role_id === 3
-      ? `u.user_id, u.first_name, u.last_name, u.username, u.contact_number, u.role_id, r.role_name, u.branch_id, u.status, u.created_at`
-      : `u.user_id, u.first_name, u.last_name, u.username, u.email, u.contact_number, u.role_id, r.role_name, u.branch_id, u.status, u.created_at`;
+      ? `u.user_id, u.first_name, u.last_name, u.middle_initial, u.username, u.contact_number, u.role_id, r.role_name, u.branch_id, u.status, u.created_at`
+      : `u.user_id, u.first_name, u.last_name, u.middle_initial, u.username, u.email, u.contact_number, u.role_id, r.role_name, u.branch_id, u.status, u.created_at`;
 
     let query = `
       SELECT ${selectFields}
@@ -158,7 +189,7 @@ export const getCurrentUser = async (req, res) => {
       console.log('Fallback search by username because user_id query returned no rows');
       const [fallbackRows] = await db.query(
         `
-          SELECT u.user_id, u.first_name, u.last_name, u.username, u.email, u.contact_number, u.role_id, r.role_name,
+          SELECT u.user_id, u.first_name, u.last_name, u.middle_initial, u.username, u.email, u.contact_number, u.role_id, r.role_name,
                  u.branch_id, u.status, u.created_at
           FROM users u
           LEFT JOIN roles r ON u.role_id = r.role_id
