@@ -126,8 +126,9 @@ export const getSalesTodayByBranch = async (req, res) => {
         MAX(CASE WHEN t.status = 'Completed' THEN t.total_amount ELSE NULL END) as max_order_value,
         MIN(CASE WHEN t.status = 'Completed' THEN t.total_amount ELSE NULL END) as min_order_value,
         COUNT(DISTINCT CASE WHEN t.status IN ('Voided', 'Partial Voided') THEN t.cashier_id ELSE NULL END) as staff_who_voided_count,
-        SUM(CASE WHEN t.status = 'Completed' THEN t.total_amount ELSE 0 END) as total_sales,
-        SUM(CASE WHEN t.status = 'Completed' THEN t.total_amount ELSE 0 END) as gross_sales
+        SUM(CASE WHEN t.status = 'Completed' THEN t.total_amount ELSE 0 END) as gross_sales,
+        SUM(CASE WHEN t.status = 'Completed' THEN t.discount_amount ELSE 0 END) as total_discounts,
+        SUM(CASE WHEN t.status IN ('Voided', 'Partial Voided') THEN t.total_amount ELSE 0 END) as voided_sales
       FROM transactions t
       WHERE DATE(t.created_at) = CURDATE()
     `;
@@ -142,30 +143,17 @@ export const getSalesTodayByBranch = async (req, res) => {
 
     const [[result]] = await db.query(query, params);
 
-    // Calculate voided sales from transaction_items voided_quantity
-    let voidedQuery = `
-      SELECT COALESCE(SUM(ti.voided_quantity * ti.price), 0) as voided_sales
-      FROM transactions t
-      LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id
-      WHERE DATE(t.created_at) = CURDATE()
-    `;
-    let voidedParams = [];
-    if (role_id === 2) {
-      voidedQuery += ` AND t.branch_id = ?`;
-      voidedParams.push(branch_id);
-    }
-
-    const [[voidedResult]] = await db.query(voidedQuery, voidedParams);
-
-    const total_sales = Number(result?.total_sales || 0);
     const gross_sales = Number(result?.gross_sales || 0);
-    const voided_sales = Number(voidedResult?.voided_sales || 0);
-    const avgOrderValue = result?.completed_count > 0 ? Number((total_sales / result.completed_count).toFixed(2)) : 0;
+    const total_discounts = Number(result?.total_discounts || 0);
+    const voided_sales = Number(result?.voided_sales || 0);
+    const net_sales = gross_sales - total_discounts;
+    const avgOrderValue = result?.completed_count > 0 ? Number((net_sales / result.completed_count).toFixed(2)) : 0;
 
     res.json({
-      total_sales,
       gross_sales,
       voided_sales,
+      discounts: total_discounts,
+      total_sales: net_sales,
       transaction_count: result?.all_transaction_count || 0,
       completed_count: result?.completed_count || 0,
       partial_refunded_count: result?.partial_refunded_count || 0,

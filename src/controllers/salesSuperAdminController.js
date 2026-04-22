@@ -55,36 +55,39 @@ export async function getKpis(req, res) {
       ? [startSql, endSql, parseInt(branchId)]
       : [startSql, endSql];
 
-    // 1) Total sales (filtered by branch if selected) - NET SALES (only completed)
-    const [totalRows] = await db.execute(
-      `SELECT COALESCE(SUM(t.total_amount), 0) AS total_sales
-       FROM transactions t
-       WHERE ${whereClause}`,
-      params
-    );
+    // Setup where clause for completed transactions only
+    const completedWhereClause = whereClause + ` AND t.status = 'Completed'`;
+    const completedParams = [...params, 'Completed'];
 
-    // 1.5) Gross sales (filtered by branch/date if selected) - ALL SALES (including voided/refunded)
-    const grossWhereClause = branchId && branchId !== 'all'
-      ? `t.created_at BETWEEN ? AND ? AND t.branch_id = ?`
-      : `t.created_at BETWEEN ? AND ?`;
-    const grossParams = branchId && branchId !== 'all'
-      ? [startSql, endSql, parseInt(branchId)]
-      : [startSql, endSql];
-
+    // 1) GROSS SALES = SUM(completed transactions total_amount only)
     const [grossRows] = await db.execute(
       `SELECT COALESCE(SUM(t.total_amount), 0) AS gross_sales
        FROM transactions t
-       WHERE ${grossWhereClause}`,
-      grossParams
+       WHERE ${completedWhereClause}`,
+      completedParams
     );
 
-    // 1.6) Voided sales (filtered by branch/date if selected) - VALUE OF VOIDED PORTIONS
+    // 2) VOID SALES = SUM(voided transactions total_amount only - includes Voided and Partial Voided)
+    const voidedWhereClause = branchId && branchId !== 'all'
+      ? `t.created_at BETWEEN ? AND ? AND t.branch_id = ? AND t.status IN ('Voided', 'Partial Voided')`
+      : `t.created_at BETWEEN ? AND ? AND t.status IN ('Voided', 'Partial Voided')`;
+    const voidedParams = branchId && branchId !== 'all'
+      ? [startSql, endSql, parseInt(branchId)]
+      : [startSql, endSql];
+
     const [voidedRows] = await db.execute(
-      `SELECT COALESCE(SUM(ti.voided_quantity * ti.price), 0) AS voided_sales
+      `SELECT COALESCE(SUM(t.total_amount), 0) AS voided_sales
        FROM transactions t
-       LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id
-       WHERE ${grossWhereClause}`,
-      grossParams
+       WHERE ${voidedWhereClause}`,
+      voidedParams
+    );
+
+    // 3) DISCOUNTS = SUM(all discount amounts from completed transactions)
+    const [discountRows] = await db.execute(
+      `SELECT COALESCE(SUM(t.discount_amount), 0) AS total_discounts
+       FROM transactions t
+       WHERE ${completedWhereClause}`,
+      completedParams
     );
 
     // 2) Total transactions (filtered by branch if selected)
@@ -114,7 +117,8 @@ export async function getKpis(req, res) {
 
     const grossSales = Number(grossRows[0].gross_sales || 0);
     const voidedSales = Number(voidedRows[0].voided_sales || 0);
-    const netSales = grossSales - voidedSales;
+    const discounts = Number(discountRows[0].total_discounts || 0);
+    const netSales = grossSales - discounts;
     const transactionCount = Number(countRows[0].transaction_count || 0);
     const partialRefunded = statusRows[0]?.partial_refunded_count || 0;
     const refunded = statusRows[0]?.refunded_count || 0;
@@ -134,6 +138,7 @@ export async function getKpis(req, res) {
     return res.json({
       gross_sales: grossSales,
       voided_sales: voidedSales,
+      discounts: discounts,
       total_sales: netSales,
       transaction_count: transactionCount,
       partial_refunded_count: partialRefunded,
