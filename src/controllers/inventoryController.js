@@ -444,19 +444,19 @@ export const getSubCategories = async (req, res) => {
 // CREATE main category
 export const createMainCategory = async (req, res) => {
   try {
-    const { name, description } = req.body;
+    const { name } = req.body;
 
     if (!name || !name.trim()) {
       return res.status(400).json({ error: "Category name is required" });
     }
 
     const [result] = await db.execute(
-      `INSERT INTO main_categories (name, description) VALUES (?, ?)`,
-      [name.trim(), description || null]
+      `INSERT INTO main_categories (name) VALUES (?)`,
+      [name.trim()]
     );
 
     const [newCategory] = await db.execute(
-      `SELECT main_category_id, name, description FROM main_categories WHERE main_category_id = ?`,
+      `SELECT main_category_id, name FROM main_categories WHERE main_category_id = ?`,
       [result.insertId]
     );
 
@@ -477,15 +477,15 @@ export const createMainCategory = async (req, res) => {
 export const updateMainCategory = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description } = req.body;
+    const { name } = req.body;
 
     if (!name || !name.trim()) {
       return res.status(400).json({ error: "Category name is required" });
     }
 
     const [result] = await db.execute(
-      `UPDATE main_categories SET name = ?, description = ?, updated_at = NOW() WHERE main_category_id = ?`,
-      [name.trim(), description || null, id]
+      `UPDATE main_categories SET name = ?, updated_at = NOW() WHERE main_category_id = ?`,
+      [name.trim(), id]
     );
 
     if (result.affectedRows === 0) {
@@ -493,7 +493,7 @@ export const updateMainCategory = async (req, res) => {
     }
 
     const [updatedCategory] = await db.execute(
-      `SELECT main_category_id, name, description FROM main_categories WHERE main_category_id = ?`,
+      `SELECT main_category_id, name FROM main_categories WHERE main_category_id = ?`,
       [id]
     );
 
