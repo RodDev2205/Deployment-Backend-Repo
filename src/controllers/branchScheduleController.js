@@ -17,17 +17,19 @@ export const setBranchOperatingPeriod = async (req, res) => {
       [branchId]
     );
 
+    const finalEndDate = endDate && endDate.trim() ? endDate : null;
+
     if (existing.length > 0) {
       // Update existing
       await db.execute(
         'UPDATE branch_operating_period SET start_date = ?, end_date = ? WHERE branch_id = ?',
-        [startDate, endDate || null, branchId]
+        [startDate, finalEndDate, branchId]
       );
     } else {
       // Insert new
       await db.execute(
         'INSERT INTO branch_operating_period (branch_id, start_date, end_date) VALUES (?, ?, ?)',
-        [branchId, startDate, endDate || null]
+        [branchId, startDate, finalEndDate]
       );
     }
 
