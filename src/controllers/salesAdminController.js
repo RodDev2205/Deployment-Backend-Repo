@@ -142,14 +142,30 @@ export const getSalesTodayByBranch = async (req, res) => {
 
     const [[result]] = await db.query(query, params);
 
+    // Calculate voided sales from transaction_items voided_quantity
+    let voidedQuery = `
+      SELECT COALESCE(SUM(ti.voided_quantity * ti.price), 0) as voided_sales
+      FROM transactions t
+      LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id
+      WHERE DATE(t.created_at) = CURDATE()
+    `;
+    let voidedParams = [];
+    if (role_id === 2) {
+      voidedQuery += ` AND t.branch_id = ?`;
+      voidedParams.push(branch_id);
+    }
+
+    const [[voidedResult]] = await db.query(voidedQuery, voidedParams);
+
     const total_sales = Number(result?.total_sales || 0);
     const gross_sales = Number(result?.gross_sales || 0);
+    const voided_sales = Number(voidedResult?.voided_sales || 0);
     const avgOrderValue = result?.completed_count > 0 ? Number((total_sales / result.completed_count).toFixed(2)) : 0;
 
     res.json({
       total_sales,
       gross_sales,
-      voided_sales: 0,
+      voided_sales,
       transaction_count: result?.all_transaction_count || 0,
       completed_count: result?.completed_count || 0,
       partial_refunded_count: result?.partial_refunded_count || 0,

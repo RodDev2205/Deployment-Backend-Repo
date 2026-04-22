@@ -117,21 +117,9 @@ export const voidTransaction = async (req, res) => {
       );
     }
 
-    // Update transaction total_amount to reflect voided items
-    const [currentTotal] = await connection.query(
-      `SELECT SUM((quantity + voided_quantity) * price) as original_total,
-              SUM(quantity * price) as current_total
-       FROM transaction_items WHERE transaction_id = ?`,
-      [transaction_id]
-    );
-    
-    const voidedAmount = (currentTotal[0].original_total || 0) - (currentTotal[0].current_total || 0);
-    
-    // Update transaction total_amount
-    await connection.query(
-      `UPDATE transactions SET total_amount = total_amount - ? WHERE transaction_id = ?`,
-      [voidedAmount, transaction_id]
-    );
+    // DO NOT update transaction total_amount - keep original sale amount for reporting
+    // Voided amounts are tracked in transaction_items.voided_quantity
+    // Sales reports will calculate net sales = total_amount - (sum of voided_quantity * price)
 
     // Check if transaction is fully voided (all items have quantity = 0)
     const [[{totalRemaining}]] = await connection.query(
