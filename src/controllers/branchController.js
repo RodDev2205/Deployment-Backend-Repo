@@ -6,13 +6,17 @@ export const createBranch = async (req, res) => {
       branchName,
       openingTime,
       closingTime,
-      locationId,
-      address = ""
+      locationId = null,
+      address = "",
+      locationText = ""
     } = req.body;
 
-    if (!branchName || !openingTime || !closingTime || !locationId) {
-      return res.status(400).json({ message: "All fields are required, including location" });
+    if (!branchName || !openingTime || !closingTime) {
+      return res.status(400).json({ message: "Branch name, opening time, and closing time are required" });
     }
+
+    // Use address from request, fallback to locationText
+    const finalAddress = address || locationText || "";
 
     const [locationColumn] = await db.query(
       "SHOW COLUMNS FROM branches LIKE 'location_id'"
@@ -29,13 +33,13 @@ export const createBranch = async (req, res) => {
       `;
       params = [
         branchName,
-        address || "",
+        finalAddress,
         "",
         openingTime,
         closingTime,
-        locationId,
-        'active', // Set default status to active
-        req.user.user_id // comes from JWT
+        locationId || null,
+        'active',
+        req.user.user_id
       ];
     } else {
       return res.status(400).json({ message: "Location support not available in database" });
@@ -49,9 +53,10 @@ export const createBranch = async (req, res) => {
       branch: {
         branch_id: result.insertId,
         name: branchName,
+        address: finalAddress,
         openingTime,
         closingTime,
-        locationId: locationId
+        locationId: locationId || null
       }
     });
 
@@ -185,15 +190,17 @@ export const updateBranch = async (req, res) => {
       branchName,
       openingTime,
       closingTime,
-      locationId,
+      locationId = null,
+      address = "",
+      locationText = "",
       contactPersonId
     } = req.body;
 
-    if (!branchName || !openingTime || !closingTime || !locationId) {
-      return res.status(400).json({ message: "All fields are required, including location" });
+    if (!branchName || !openingTime || !closingTime) {
+      return res.status(400).json({ message: "Branch name, opening time, and closing time are required" });
     }
 
-    // Check if branch exists and user has permission (same branch or superadmin)
+    // Check if branch exists
     const [existingBranch] = await db.query(
       'SELECT * FROM branches WHERE branch_id = ?',
       [id]
@@ -203,16 +210,20 @@ export const updateBranch = async (req, res) => {
       return res.status(404).json({ message: "Branch not found" });
     }
 
+    // Use address from request, fallback to locationText
+    const finalAddress = address || locationText || "";
+
     // Update the branch
     await db.query(
       `UPDATE branches SET
         branch_name = ?,
+        address = ?,
         opening_time = ?,
         closing_time = ?,
         location_id = ?,
         contact_user_id = ?
        WHERE branch_id = ?`,
-      [branchName, openingTime, closingTime, locationId, contactPersonId || null, id]
+      [branchName, finalAddress, openingTime, closingTime, locationId || null, contactPersonId || null, id]
     );
 
     res.status(200).json({
@@ -220,9 +231,10 @@ export const updateBranch = async (req, res) => {
       branch: {
         branch_id: id,
         name: branchName,
+        address: finalAddress,
         openingTime,
         closingTime,
-        locationId,
+        locationId: locationId || null,
         contactPersonId
       }
     });
