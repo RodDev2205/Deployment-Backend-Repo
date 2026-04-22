@@ -6,8 +6,14 @@ import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 dotenv.config();
 
-// Helper function to log both login_logs and activity_logs
+// Helper function to log login attempts (only for existing users)
 async function logLoginActivity({ userId, branchId, username, status, reason, ipAddress }) {
+  // Only log to login_logs if user exists (userId is not null)
+  if (!userId) {
+    console.log(`Login attempt for non-existent user: ${username} - ${reason}`);
+    return null;
+  }
+
   // Insert into login_logs
   const [loginResult] = await db.query(
     `INSERT INTO login_logs 
