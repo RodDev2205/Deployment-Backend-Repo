@@ -7,7 +7,10 @@ export const setBranchOperatingPeriod = async (req, res) => {
   try {
     const { branchId, startDate, endDate } = req.body;
 
+    console.log('🔧 setBranchOperatingPeriod called with:', { branchId, startDate, endDate });
+
     if (!branchId || !startDate) {
+      console.warn('❌ Missing required fields:', { branchId, startDate });
       return res.status(400).json({ error: 'Branch ID and start date are required' });
     }
 
@@ -17,26 +20,35 @@ export const setBranchOperatingPeriod = async (req, res) => {
       [branchId]
     );
 
-    const finalEndDate = endDate && endDate.trim() ? endDate : null;
+    console.log('📋 Existing operating period record:', existing.length > 0 ? 'Found' : 'Not found');
+
+    // Handle end date - it can be null or an empty string
+    const finalEndDate = (endDate && typeof endDate === 'string' && endDate.trim()) ? endDate.trim() : null;
+    
+    console.log('📅 Final dates:', { startDate, finalEndDate });
 
     if (existing.length > 0) {
       // Update existing
-      await db.execute(
+      console.log('🔄 Updating existing operating period...');
+      const [updateResult] = await db.execute(
         'UPDATE branch_operating_period SET start_date = ?, end_date = ? WHERE branch_id = ?',
         [startDate, finalEndDate, branchId]
       );
+      console.log('✅ Update result:', updateResult);
     } else {
       // Insert new
-      await db.execute(
+      console.log('➕ Inserting new operating period...');
+      const [insertResult] = await db.execute(
         'INSERT INTO branch_operating_period (branch_id, start_date, end_date) VALUES (?, ?, ?)',
         [branchId, startDate, finalEndDate]
       );
+      console.log('✅ Insert result:', insertResult);
     }
 
-    res.status(200).json({ message: 'Operating period set successfully' });
+    res.status(200).json({ message: 'Operating period set successfully', branchId, startDate, endDate: finalEndDate });
   } catch (error) {
-    console.error('Set operating period error:', error);
-    res.status(500).json({ error: 'Failed to set operating period' });
+    console.error('❌ Set operating period error:', error);
+    res.status(500).json({ error: 'Failed to set operating period', details: error.message });
   }
 };
 
