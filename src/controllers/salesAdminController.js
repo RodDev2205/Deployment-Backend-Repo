@@ -128,7 +128,8 @@ export const getSalesTodayByBranch = async (req, res) => {
         COUNT(DISTINCT CASE WHEN t.status IN ('Voided', 'Partial Voided') THEN t.cashier_id ELSE NULL END) as staff_who_voided_count,
         SUM(CASE WHEN t.status = 'Completed' THEN t.subtotal ELSE 0 END) as gross_sales,
         SUM(CASE WHEN t.status = 'Completed' THEN t.discount_amount ELSE 0 END) as total_discounts,
-        SUM(CASE WHEN t.status IN ('Voided', 'Partial Voided') THEN t.subtotal ELSE 0 END) as voided_sales
+        SUM(CASE WHEN t.status IN ('Voided', 'Partial Voided') THEN t.subtotal ELSE 0 END) as voided_sales,
+        SUM(CASE WHEN t.status = 'Completed' THEN t.total_amount ELSE 0 END) as net_sales
       FROM transactions t
       WHERE DATE(t.created_at) = CURDATE()
     `;
@@ -146,7 +147,17 @@ export const getSalesTodayByBranch = async (req, res) => {
     const gross_sales = Number(result?.gross_sales || 0);
     const total_discounts = Number(result?.total_discounts || 0);
     const voided_sales = Number(result?.voided_sales || 0);
-    const net_sales = gross_sales - total_discounts;
+    let net_sales = 0;
+
+    // Calculate net sales directly from completed transactions
+    const [netSalesResult] = await db.query(
+      `SELECT COALESCE(SUM(t.total_amount), 0) AS net_sales
+       FROM transactions t
+       WHERE t.status = 'Completed' AND DATE(t.created_at) = CURDATE()
+       ${role_id === 2 ? 'AND t.branch_id = ?' : ''}`,
+      role_id === 2 ? [branch_id] : []
+    );
+    net_sales = Number(netSalesResult[0]?.net_sales || 0);
     const avgOrderValue = result?.completed_count > 0 ? Number((net_sales / result.completed_count).toFixed(2)) : 0;
 
     res.json({

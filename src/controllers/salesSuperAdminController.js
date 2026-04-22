@@ -86,6 +86,14 @@ export async function getKpis(req, res) {
       params
     );
 
+    // 4) NET SALES = SUM(total_amount from completed transactions AFTER discount)
+    const [netSalesRows] = await db.execute(
+      `SELECT COALESCE(SUM(t.total_amount), 0) AS net_sales
+       FROM transactions t
+       WHERE ${whereClause}`,
+      params
+    );
+
     // 2) Total transactions (filtered by branch if selected)
     const [countRows] = await db.execute(
       `SELECT COUNT(*) AS transaction_count FROM transactions t WHERE ${whereClause}`,
@@ -114,7 +122,7 @@ export async function getKpis(req, res) {
     const grossSales = Number(grossRows[0].gross_sales || 0);
     const voidedSales = Number(voidedRows[0].voided_sales || 0);
     const discounts = Number(discountRows[0].total_discounts || 0);
-    const netSales = grossSales - discounts;
+    const netSales = Number(netSalesRows[0].net_sales || 0);
     const transactionCount = Number(countRows[0].transaction_count || 0);
     const partialRefunded = statusRows[0]?.partial_refunded_count || 0;
     const refunded = statusRows[0]?.refunded_count || 0;
