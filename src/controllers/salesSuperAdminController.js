@@ -59,15 +59,15 @@ export async function getKpis(req, res) {
     const completedWhereClause = whereClause + ` AND t.status = 'Completed'`;
     const completedParams = [...params, 'Completed'];
 
-    // 1) GROSS SALES = SUM(completed transactions total_amount only)
+    // 1) GROSS SALES = SUM(subtotal from Completed transactions BEFORE discount)
     const [grossRows] = await db.execute(
-      `SELECT COALESCE(SUM(t.total_amount), 0) AS gross_sales
+      `SELECT COALESCE(SUM(t.subtotal), 0) AS gross_sales
        FROM transactions t
        WHERE ${completedWhereClause}`,
       completedParams
     );
 
-    // 2) VOID SALES = SUM(voided transactions total_amount only - includes Voided and Partial Voided)
+    // 2) VOID SALES = SUM(subtotal from Voided transactions - includes Voided and Partial Voided)
     const voidedWhereClause = branchId && branchId !== 'all'
       ? `t.created_at BETWEEN ? AND ? AND t.branch_id = ? AND t.status IN ('Voided', 'Partial Voided')`
       : `t.created_at BETWEEN ? AND ? AND t.status IN ('Voided', 'Partial Voided')`;
@@ -76,7 +76,7 @@ export async function getKpis(req, res) {
       : [startSql, endSql];
 
     const [voidedRows] = await db.execute(
-      `SELECT COALESCE(SUM(t.total_amount), 0) AS voided_sales
+      `SELECT COALESCE(SUM(t.subtotal), 0) AS voided_sales
        FROM transactions t
        WHERE ${voidedWhereClause}`,
       voidedParams

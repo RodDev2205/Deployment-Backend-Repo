@@ -126,9 +126,9 @@ export const getSalesTodayByBranch = async (req, res) => {
         MAX(CASE WHEN t.status = 'Completed' THEN t.total_amount ELSE NULL END) as max_order_value,
         MIN(CASE WHEN t.status = 'Completed' THEN t.total_amount ELSE NULL END) as min_order_value,
         COUNT(DISTINCT CASE WHEN t.status IN ('Voided', 'Partial Voided') THEN t.cashier_id ELSE NULL END) as staff_who_voided_count,
-        SUM(CASE WHEN t.status = 'Completed' THEN t.total_amount ELSE 0 END) as gross_sales,
+        SUM(CASE WHEN t.status = 'Completed' THEN t.subtotal ELSE 0 END) as gross_sales,
         SUM(CASE WHEN t.status = 'Completed' THEN t.discount_amount ELSE 0 END) as total_discounts,
-        SUM(CASE WHEN t.status IN ('Voided', 'Partial Voided') THEN t.total_amount ELSE 0 END) as voided_sales
+        SUM(CASE WHEN t.status IN ('Voided', 'Partial Voided') THEN t.subtotal ELSE 0 END) as voided_sales
       FROM transactions t
       WHERE DATE(t.created_at) = CURDATE()
     `;
