@@ -573,11 +573,11 @@ export const getTransactionDetails = async (req, res) => {
 
 // VOID transaction (full or partial)
 export const voidTransaction = async (req, res) => {
-  const { transaction_id, reason, admin_pin, void_items } = req.body;
+  const { transaction_id, void_reason_id, admin_pin, void_items } = req.body;
   const user = req.user; // From JWT token
 
-  if (!transaction_id || !reason || !admin_pin) {
-    return res.status(400).json({ success: false, message: "Transaction ID, reason, and admin PIN are required" });
+  if (!transaction_id || !void_reason_id || !admin_pin) {
+    return res.status(400).json({ success: false, message: "Transaction ID, void_reason_id, and admin PIN are required" });
   }
 
   const connection = await db.getConnection();
@@ -697,11 +697,18 @@ export const voidTransaction = async (req, res) => {
 
     console.log("Updated status to:", newStatus);
 
+    // Get the reason name for logging
+    const [[reasonRow]] = await connection.query(
+      `SELECT reason_name FROM void_reason WHERE void_reason_id = ?`,
+      [void_reason_id]
+    );
+    const reasonName = reasonRow?.reason_name || 'Unknown Reason';
+
     // Log void action
     await connection.query(
       `INSERT INTO transaction_logs (transaction_id, action, performed_by, reason, details)
        VALUES (?, 'void', ?, ?, ?)`,
-      [transaction_id, user.user_id, reason, JSON.stringify({
+      [transaction_id, user.user_id, reasonName, JSON.stringify({
         void_type: voidType,
         void_items: void_items || null,
         original_status: transaction.status
@@ -727,7 +734,7 @@ export const voidTransaction = async (req, res) => {
       userId: user.user_id,
       branchId: user.branch_id,
       activityType: voidType === 'full' ? 'transaction_voided' : 'transaction_partial_void',
-      description: `${voidType === 'full' ? 'Fully' : 'Partially'} voided transaction ${transaction.transaction_number} - Reason: ${reason}`,
+      description: `${voidType === 'full' ? 'Fully' : 'Partially'} voided transaction ${transaction.transaction_number} - Reason: ${reasonName}`,
       referenceId: transaction_id
     });
 

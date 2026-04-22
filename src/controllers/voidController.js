@@ -18,16 +18,29 @@ async function logPOSActivity({ userId, branchId, activityType, description, ref
   }
 }
 
+// Get all void reasons
+export const getVoidReasons = async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT void_reason_id, reason_name FROM void_reason ORDER BY reason_name ASC`
+    );
+    res.json(rows || []);
+  } catch (err) {
+    console.error('Error fetching void reasons:', err);
+    res.status(500).json({ error: 'Failed to fetch void reasons', details: err.message });
+  }
+};
+
 // record a void request and update transaction status
 export const voidTransaction = async (req, res) => {
-  const { transaction_id, reason, admin_pin, void_items } = req.body;
+  const { transaction_id, void_reason_id, admin_pin, void_items } = req.body;
   const cashier_id = req.user.user_id;
   const branch_id = req.user.branch_id;
 
-  console.log("Void request received:", { transaction_id, reason, admin_pin: admin_pin ? "***" : null, void_items, cashier_id, branch_id });
+  console.log("Void request received:", { transaction_id, void_reason_id, admin_pin: admin_pin ? "***" : null, void_items, cashier_id, branch_id });
 
-  if (!transaction_id || !reason || !admin_pin) {
-    return res.status(400).json({ message: "transaction_id, reason and admin_pin are required" });
+  if (!transaction_id || !void_reason_id || !admin_pin) {
+    return res.status(400).json({ message: "transaction_id, void_reason_id and admin_pin are required" });
   }
 
   const connection = await db.getConnection();
@@ -48,11 +61,11 @@ export const voidTransaction = async (req, res) => {
       return res.status(403).json({ message: "Invalid admin PIN" });
     }
 
-    // insert void record
+    // insert void record with void_reason_id
     const [result] = await connection.query(
-      `INSERT INTO voids (transaction_id, cashier_id, manager_id, branch_id, reason)
+      `INSERT INTO voids (transaction_id, cashier_id, manager_id, branch_id, void_reason_id)
        VALUES (?, ?, ?, ?, ?)`,
-      [transaction_id, cashier_id, admin.user_id, branch_id, reason]
+      [transaction_id, cashier_id, admin.user_id, branch_id, void_reason_id]
     );
 
     // fetch all items sold in this transaction
@@ -142,12 +155,19 @@ export const voidTransaction = async (req, res) => {
       [transaction_id]
     );
 
+    // Get the reason name for logging
+    const [[reasonRow]] = await connection.query(
+      `SELECT reason_name FROM void_reason WHERE void_reason_id = ?`,
+      [void_reason_id]
+    );
+    const reasonName = reasonRow?.reason_name || 'Unknown Reason';
+
     // Log the void transaction
     await logPOSActivity({
       userId: cashier_id,
       branchId: branch_id,
       activityType: isPartialVoid ? 'transaction_partial_void' : 'transaction_voided',
-      description: `${isPartialVoid ? 'Partially' : 'Fully'} voided transaction ${transaction.transaction_number} - Reason: ${reason}`,
+      description: `${isPartialVoid ? 'Partially' : 'Fully'} voided transaction ${transaction.transaction_number} - Reason: ${reasonName}`,
       referenceId: transaction_id
     });
 
