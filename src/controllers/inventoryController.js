@@ -427,14 +427,212 @@ export const getSubCategories = async (req, res) => {
     let params = [];
 
     if (main_category_id) {
-      query = `SELECT sub_category_id, main_category_id, name FROM sub_categories WHERE main_category_id = ?`;
+      query = `SELECT sub_category_id, main_category_id, name, description FROM sub_categories WHERE main_category_id = ?`;
       params = [Number(main_category_id)];
     } else {
-      query = `SELECT sub_category_id, main_category_id, name FROM sub_categories`;
+      query = `SELECT sub_category_id, main_category_id, name, description FROM sub_categories`;
     }
 
     const [rows] = await db.execute(query, params);
     res.status(200).json(rows || []);
+  } catch (error) {
+    console.error("DB ERROR:", error);
+    res.status(500).json({ message: "Database error", error: error.message });
+  }
+};
+
+// CREATE main category
+export const createMainCategory = async (req, res) => {
+  try {
+    const { name, description } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: "Category name is required" });
+    }
+
+    const [result] = await db.execute(
+      `INSERT INTO main_categories (name, description) VALUES (?, ?)`,
+      [name.trim(), description || null]
+    );
+
+    const [newCategory] = await db.execute(
+      `SELECT main_category_id, name, description FROM main_categories WHERE main_category_id = ?`,
+      [result.insertId]
+    );
+
+    res.status(201).json({
+      message: "Main category created successfully",
+      data: newCategory[0]
+    });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: "Category name already exists" });
+    }
+    console.error("DB ERROR:", error);
+    res.status(500).json({ message: "Database error", error: error.message });
+  }
+};
+
+// UPDATE main category
+export const updateMainCategory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: "Category name is required" });
+    }
+
+    const [result] = await db.execute(
+      `UPDATE main_categories SET name = ?, description = ?, updated_at = NOW() WHERE main_category_id = ?`,
+      [name.trim(), description || null, id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Category not found" });
+    }
+
+    const [updatedCategory] = await db.execute(
+      `SELECT main_category_id, name, description FROM main_categories WHERE main_category_id = ?`,
+      [id]
+    );
+
+    res.json({
+      message: "Main category updated successfully",
+      data: updatedCategory[0]
+    });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: "Category name already exists" });
+    }
+    console.error("DB ERROR:", error);
+    res.status(500).json({ message: "Database error", error: error.message });
+  }
+};
+
+// DELETE main category
+export const deleteMainCategory = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if main category has sub categories
+    const [subCats] = await db.execute(
+      `SELECT COUNT(*) as count FROM sub_categories WHERE main_category_id = ?`,
+      [id]
+    );
+
+    if (subCats[0].count > 0) {
+      return res.status(400).json({ error: "Cannot delete category with sub-categories. Delete sub-categories first." });
+    }
+
+    const [result] = await db.execute(
+      `DELETE FROM main_categories WHERE main_category_id = ?`,
+      [id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Category not found" });
+    }
+
+    res.json({ message: "Main category deleted successfully" });
+  } catch (error) {
+    console.error("DB ERROR:", error);
+    res.status(500).json({ message: "Database error", error: error.message });
+  }
+};
+
+// CREATE sub category
+export const createSubCategory = async (req, res) => {
+  try {
+    const { main_category_id, name, description } = req.body;
+
+    if (!main_category_id) {
+      return res.status(400).json({ error: "Main category ID is required" });
+    }
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: "Sub category name is required" });
+    }
+
+    // Verify main category exists
+    const [mainCat] = await db.execute(
+      `SELECT main_category_id FROM main_categories WHERE main_category_id = ?`,
+      [main_category_id]
+    );
+
+    if (mainCat.length === 0) {
+      return res.status(404).json({ error: "Main category not found" });
+    }
+
+    const [result] = await db.execute(
+      `INSERT INTO sub_categories (main_category_id, name, description) VALUES (?, ?, ?)`,
+      [main_category_id, name.trim(), description || null]
+    );
+
+    const [newSubCategory] = await db.execute(
+      `SELECT sub_category_id, main_category_id, name, description FROM sub_categories WHERE sub_category_id = ?`,
+      [result.insertId]
+    );
+
+    res.status(201).json({
+      message: "Sub category created successfully",
+      data: newSubCategory[0]
+    });
+  } catch (error) {
+    console.error("DB ERROR:", error);
+    res.status(500).json({ message: "Database error", error: error.message });
+  }
+};
+
+// UPDATE sub category
+export const updateSubCategory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: "Sub category name is required" });
+    }
+
+    const [result] = await db.execute(
+      `UPDATE sub_categories SET name = ?, description = ?, updated_at = NOW() WHERE sub_category_id = ?`,
+      [name.trim(), description || null, id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Sub category not found" });
+    }
+
+    const [updatedSubCategory] = await db.execute(
+      `SELECT sub_category_id, main_category_id, name, description FROM sub_categories WHERE sub_category_id = ?`,
+      [id]
+    );
+
+    res.json({
+      message: "Sub category updated successfully",
+      data: updatedSubCategory[0]
+    });
+  } catch (error) {
+    console.error("DB ERROR:", error);
+    res.status(500).json({ message: "Database error", error: error.message });
+  }
+};
+
+// DELETE sub category
+export const deleteSubCategory = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [result] = await db.execute(
+      `DELETE FROM sub_categories WHERE sub_category_id = ?`,
+      [id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Sub category not found" });
+    }
+
+    res.json({ message: "Sub category deleted successfully" });
   } catch (error) {
     console.error("DB ERROR:", error);
     res.status(500).json({ message: "Database error", error: error.message });

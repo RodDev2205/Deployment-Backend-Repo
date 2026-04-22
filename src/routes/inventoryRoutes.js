@@ -9,7 +9,13 @@ import { addIngredient,
          getLowStockCount,
          getLowStockItems,
          getMainCategories,
-         getSubCategories } from '../controllers/inventoryController.js';
+         getSubCategories,
+         createMainCategory,
+         updateMainCategory,
+         deleteMainCategory,
+         createSubCategory,
+         updateSubCategory,
+         deleteSubCategory } from '../controllers/inventoryController.js';
 
 const router = Router();
 
@@ -69,6 +75,7 @@ router.get(
   getLowStockItems
 );
 
+// ===== MAIN CATEGORIES ROUTES =====
 // Get all main categories
 router.get(
   '/main-categories',
@@ -77,12 +84,61 @@ router.get(
   getMainCategories
 );
 
+// Create main category
+router.post(
+  '/main-categories',
+  verifyToken,
+  requireRole(2, 3), // SuperAdmin and Admin
+  createMainCategory
+);
+
+// Update main category
+router.put(
+  '/main-categories/:id',
+  verifyToken,
+  requireRole(2, 3), // SuperAdmin and Admin
+  updateMainCategory
+);
+
+// Delete main category
+router.delete(
+  '/main-categories/:id',
+  verifyToken,
+  requireRole(2, 3), // SuperAdmin and Admin
+  deleteMainCategory
+);
+
+// ===== SUB CATEGORIES ROUTES =====
 // Get all sub categories (optionally filtered by main_category_id)
 router.get(
   '/sub-categories',
   verifyToken,
   requireRole(2, 3), // SuperAdmin and Admin
   getSubCategories
+);
+
+// Create sub category
+router.post(
+  '/sub-categories',
+  verifyToken,
+  requireRole(2, 3), // SuperAdmin and Admin
+  createSubCategory
+);
+
+// Update sub category
+router.put(
+  '/sub-categories/:id',
+  verifyToken,
+  requireRole(2, 3), // SuperAdmin and Admin
+  updateSubCategory
+);
+
+// Delete sub category
+router.delete(
+  '/sub-categories/:id',
+  verifyToken,
+  requireRole(2, 3), // SuperAdmin and Admin
+  deleteSubCategory
 );
 
 export default router;
