@@ -24,6 +24,7 @@ import inventoryRoutes from "./routes/inventoryRoutes.js"; // <-- import invento
 import feedbackRoutes from "./routes/feedbackRoutes.js"; // <-- import feedback route
 import globalIngredientsRoutes from "./routes/globalIngredientsRoutes.js";
 import branchInventoryRoutes from "./routes/branchInventoryRoutes.js";
+import voidReasonRoutes from "./routes/voidReasonRoutes.js"; // <-- import void reason routes
 
 dotenv.config();
 
@@ -68,6 +69,7 @@ app.use("/api/activity-logs", activityRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/global-ingredients", globalIngredientsRoutes);
 app.use("/api/branch-inventory", branchInventoryRoutes);
+app.use("/api/void-reasons", voidReasonRoutes); // <-- register void reason routes
 // Print route
 
 app.post("/api/print-receipt", async (req, res) => {
