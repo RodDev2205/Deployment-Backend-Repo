@@ -62,7 +62,7 @@ export const login = async (req, res) => {
         reason: "User not found",
         ipAddress
       });
-      return res.status(400).json({ error: "Invalid username or password" });
+      return res.status(400).json({ error: "Username is incorrect" });
     }
 
     const user = rows[0];
@@ -78,7 +78,7 @@ export const login = async (req, res) => {
         reason: "Wrong password",
         ipAddress
       });
-      return res.status(400).json({ error: "Invalid username or password" });
+      return res.status(400).json({ error: "Wrong password" });
     }
 
     // STEP 3: Check if branch is deactivated (only for non-superadmin users)
