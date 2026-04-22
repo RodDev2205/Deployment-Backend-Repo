@@ -409,7 +409,7 @@ export const editIngredientById = async (req, res) => {
 export const getMainCategories = async (req, res) => {
   try {
     const [rows] = await db.execute(
-      `SELECT main_category_id, name, description FROM main_categories ORDER BY name ASC`
+      `SELECT main_category_id, name FROM main_categories ORDER BY name ASC`
     );
     res.status(200).json(rows || []);
   } catch (error) {
@@ -427,10 +427,10 @@ export const getSubCategories = async (req, res) => {
     let params = [];
 
     if (main_category_id) {
-      query = `SELECT sub_category_id, main_category_id, name, description FROM sub_categories WHERE main_category_id = ? ORDER BY name ASC`;
+      query = `SELECT sub_category_id, main_category_id, name FROM sub_categories WHERE main_category_id = ? ORDER BY name ASC`;
       params = [Number(main_category_id)];
     } else {
-      query = `SELECT sub_category_id, main_category_id, name, description FROM sub_categories ORDER BY main_category_id ASC, name ASC`;
+      query = `SELECT sub_category_id, main_category_id, name FROM sub_categories ORDER BY main_category_id ASC, name ASC`;
     }
 
     const [rows] = await db.execute(query, params);
