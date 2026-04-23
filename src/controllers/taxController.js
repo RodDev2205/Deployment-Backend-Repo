@@ -21,13 +21,18 @@ export const getTaxRate = async (req, res) => {
 // Update tax rate
 export const updateTaxRate = async (req, res) => {
   try {
-    const { tax_rate } = req.body;
+    const { rate, tax_rate } = req.body;
 
-    if (tax_rate === undefined || tax_rate === null) {
+    // Accept both 'rate' (from frontend) and 'tax_rate' (from direct API calls)
+    const taxRateValue = rate !== undefined ? rate : tax_rate;
+
+    if (taxRateValue === undefined || taxRateValue === null) {
       return res.status(400).json({ error: "Tax rate is required" });
     }
 
-    const parsedRate = parseFloat(tax_rate);
+    // Remove % symbol if present and parse
+    let parsedRate = String(taxRateValue).replace('%', '').trim();
+    parsedRate = parseFloat(parsedRate);
 
     if (isNaN(parsedRate) || parsedRate < 0 || parsedRate > 100) {
       return res.status(400).json({ error: "Tax rate must be a number between 0 and 100" });

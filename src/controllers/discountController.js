@@ -6,7 +6,7 @@ export const getDiscounts = async (req, res) => {
     const [rows] = await db.query(
       "SELECT discount_id, discount_name, discount_type, discount_value, is_vatable, is_stackable, status, created_at, updated_at FROM discount_types ORDER BY discount_name ASC"
     );
-    res.json(rows || []);
+    res.json({ discounts: rows || [] });
   } catch (err) {
     console.error("Error fetching discounts:", err);
     res.status(500).json({ error: "Failed to fetch discounts", details: err.message });
@@ -16,32 +16,34 @@ export const getDiscounts = async (req, res) => {
 // Create new discount
 export const createDiscount = async (req, res) => {
   try {
-    const { discount_name, discount_type, discount_value, is_vatable, is_stackable } = req.body;
+    const { name, rate, description, discount_type, is_vatable, is_stackable } = req.body;
 
     // Validation
-    if (!discount_name || !discount_name.trim()) {
+    if (!name || !name.trim()) {
       return res.status(400).json({ error: "Discount name is required" });
     }
 
-    if (!discount_type || !["percentage", "fixed"].includes(discount_type)) {
+    if (rate === undefined || rate === null) {
+      return res.status(400).json({ error: "Discount rate is required" });
+    }
+
+    const parsedRate = parseFloat(rate);
+    if (isNaN(parsedRate) || parsedRate < 0) {
+      return res.status(400).json({ error: "Discount rate must be a positive number" });
+    }
+
+    // Use provided discount_type or default to 'percentage'
+    const type = discount_type || 'percentage';
+    if (!['percentage', 'fixed'].includes(type)) {
       return res.status(400).json({ error: "Discount type must be 'percentage' or 'fixed'" });
-    }
-
-    if (discount_value === undefined || discount_value === null) {
-      return res.status(400).json({ error: "Discount value is required" });
-    }
-
-    const parsedValue = parseFloat(discount_value);
-    if (isNaN(parsedValue) || parsedValue < 0) {
-      return res.status(400).json({ error: "Discount value must be a positive number" });
     }
 
     const [result] = await db.query(
       "INSERT INTO discount_types (discount_name, discount_type, discount_value, is_vatable, is_stackable, status) VALUES (?, ?, ?, ?, ?, 'active')",
       [
-        discount_name.trim(),
-        discount_type,
-        parsedValue,
+        name.trim(),
+        type,
+        parsedRate,
         is_vatable ? 1 : 0,
         is_stackable ? 1 : 0
       ]
@@ -69,32 +71,43 @@ export const createDiscount = async (req, res) => {
 export const updateDiscount = async (req, res) => {
   try {
     const { id } = req.params;
-    const { discount_name, discount_type, discount_value, is_vatable, is_stackable } = req.body;
+    const { name, rate, description, discount_type, is_vatable, is_stackable } = req.body;
 
     // Validation
-    if (!discount_name || !discount_name.trim()) {
+    if (!name || !name.trim()) {
       return res.status(400).json({ error: "Discount name is required" });
     }
 
-    if (!discount_type || !["percentage", "fixed"].includes(discount_type)) {
+    if (rate === undefined || rate === null) {
+      return res.status(400).json({ error: "Discount rate is required" });
+    }
+
+    const parsedRate = parseFloat(rate);
+    if (isNaN(parsedRate) || parsedRate < 0) {
+      return res.status(400).json({ error: "Discount rate must be a positive number" });
+    }
+
+    // Get current discount to preserve discount_type if not provided
+    const [currentDiscount] = await db.query(
+      "SELECT discount_type FROM discount_types WHERE discount_id = ?",
+      [id]
+    );
+
+    if (currentDiscount.length === 0) {
+      return res.status(404).json({ error: "Discount not found" });
+    }
+
+    const type = discount_type || currentDiscount[0].discount_type;
+    if (!['percentage', 'fixed'].includes(type)) {
       return res.status(400).json({ error: "Discount type must be 'percentage' or 'fixed'" });
-    }
-
-    if (discount_value === undefined || discount_value === null) {
-      return res.status(400).json({ error: "Discount value is required" });
-    }
-
-    const parsedValue = parseFloat(discount_value);
-    if (isNaN(parsedValue) || parsedValue < 0) {
-      return res.status(400).json({ error: "Discount value must be a positive number" });
     }
 
     const [result] = await db.query(
       "UPDATE discount_types SET discount_name = ?, discount_type = ?, discount_value = ?, is_vatable = ?, is_stackable = ?, updated_at = NOW() WHERE discount_id = ?",
       [
-        discount_name.trim(),
-        discount_type,
-        parsedValue,
+        name.trim(),
+        type,
+        parsedRate,
         is_vatable ? 1 : 0,
         is_stackable ? 1 : 0,
         id

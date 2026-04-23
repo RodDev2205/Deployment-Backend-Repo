@@ -72,7 +72,7 @@ app.use("/api/feedback", feedbackRoutes);
 app.use("/api/global-ingredients", globalIngredientsRoutes);
 app.use("/api/branch-inventory", branchInventoryRoutes);
 app.use("/api/void-reasons", voidReasonRoutes); // <-- register void reason routes
-app.use("/api/tax", taxRoutes); // <-- register tax routes
+app.use("/api/tax-rates", taxRoutes); // <-- register tax routes (frontend calls /api/tax-rates)
 app.use("/api/discounts", discountRoutes); // <-- register discount routes
 // Print route
 

@@ -9,6 +9,7 @@ const router = express.Router();
 router.get("/", getTaxRate);
 
 // Update tax rate (Admin and SuperAdmin only)
+// Frontend sends { rate: value }, controller handles mapping to tax_rate
 router.put(
   "/",
   verifyToken,
