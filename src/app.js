@@ -25,6 +25,8 @@ import feedbackRoutes from "./routes/feedbackRoutes.js"; // <-- import feedback 
 import globalIngredientsRoutes from "./routes/globalIngredientsRoutes.js";
 import branchInventoryRoutes from "./routes/branchInventoryRoutes.js";
 import voidReasonRoutes from "./routes/voidReasonRoutes.js"; // <-- import void reason routes
+import taxRoutes from "./routes/taxRoutes.js"; // <-- import tax routes
+import discountRoutes from "./routes/discountRoutes.js"; // <-- import discount routes
 
 dotenv.config();
 
@@ -70,6 +72,8 @@ app.use("/api/feedback", feedbackRoutes);
 app.use("/api/global-ingredients", globalIngredientsRoutes);
 app.use("/api/branch-inventory", branchInventoryRoutes);
 app.use("/api/void-reasons", voidReasonRoutes); // <-- register void reason routes
+app.use("/api/tax", taxRoutes); // <-- register tax routes
+app.use("/api/discounts", discountRoutes); // <-- register discount routes
 // Print route
 
 app.post("/api/print-receipt", async (req, res) => {
