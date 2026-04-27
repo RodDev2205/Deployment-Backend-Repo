@@ -96,6 +96,7 @@ export default (io) => {
         }
 
         io.to(`branch_${branch_id}`).emit("receiveMessage", {
+          branch_id,
           message_id,
           sender_id,
           full_name: senderName,
