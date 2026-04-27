@@ -170,6 +170,7 @@ export const getBranchesWithLastMessage = async (req, res) => {
           lastTime: last ? new Date(last.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "",
           sender_name: last ? last.full_name || last.username : null,
           room_id: last ? last.message_id : null,
+          created_at: last ? last.created_at : null,
         };
       })
     );
